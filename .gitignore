@@ -172,3 +172,13 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# local directories
+
+/work/*
+cache/
+
+# apptainer
+*.sif
+
+.DS_Store
