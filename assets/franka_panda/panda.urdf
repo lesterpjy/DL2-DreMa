@@ -1,0 +1,567 @@
+<?xml version="1.0"?>
+<robot name="Panda">
+    <link name="robot_base">
+        <collision name="Panda">
+            <origin xyz="-0.308951 0.000000 0.820018" rpy="2.984763 -1.570796 0.000000" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/robot_base_coll_1.dae" />
+            </geometry>
+        </collision>
+        <visual name="Panda_link0_visual">
+            <origin xyz="-0.308813 -0.012797 0.820033" rpy="0.156830 -1.570796 0.000000" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link0_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_link0_visual_material">
+                <color rgba="0.980000 0.980000 0.980000 1.0" />
+            </material>
+        </visual>
+    </link>
+    <joint name="Panda_joint1" type="revolute">
+        <axis xyz="0 0 1" />
+        <limit upper="2.8973000049591" velocity="2.1749999523163" effort="87.0" lower="-2.8973000049591" />
+        <parent link="robot_base" />
+        <child link="Panda_link1_respondable" />
+        <origin xyz="-0.267962 -0.006392 1.083032" rpy="-3.141593 3.141593 -3.141593" />
+    </joint>
+    <link name="Panda_link1_respondable">
+        <inertial>
+            <origin xyz="0.000011 -0.031266 -0.069373" rpy="0.298997 3.140639 3.138002" />
+            <inertia ixz="0.0" iyz="-1.0842021724855e-18" ixy="6.6439146800259e-20" ixx="0.099999997764826" iyy="0.099999997764826" izz="0.099999997764826" />
+            <mass value="0.625" />
+        </inertial>
+        <collision name="Panda_link1_respondable">
+            <origin xyz="0.000096 -0.034640 -0.075509" rpy="0.298997 3.140639 3.138002" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link1_respondable_coll_1.dae" />
+            </geometry>
+        </collision>
+        <visual name="Panda_link1_visual">
+            <origin xyz="-0.000007 -0.037242 -0.068499" rpy="-3.141590 3.141587 0.000000" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link1_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_link1_visual_material">
+                <color rgba="0.980000 0.980000 0.980000 1.0" />
+            </material>
+        </visual>
+    </link>
+    <joint name="Panda_joint2" type="revolute">
+        <axis xyz="0 0 1" />
+        <limit upper="1.7627999782562" velocity="2.1749999523163" effort="87.0" lower="-1.7627999782562" />
+        <parent link="Panda_link1_respondable" />
+        <child link="Panda_link2_respondable" />
+        <origin xyz="0.000000 -0.000000 0.000000" rpy="1.570796 3.141593 -3.141593" />
+    </joint>
+    <link name="Panda_link2_respondable">
+        <inertial>
+            <origin xyz="-0.000013 -0.070322 0.031178" rpy="-1.867903 3.164601 0.002340" />
+            <inertia ixz="0.0" iyz="0.0" ixy="-2.668153783851e-19" ixx="0.099999997764826" iyy="0.099999997764826" izz="0.099999997764826" />
+            <mass value="0.625" />
+        </inertial>
+        <collision name="Panda_link2_respondable">
+            <origin xyz="0.000208 -0.076383 0.034440" rpy="-1.867903 3.164601 0.002340" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link2_respondable_coll_1.dae" />
+            </geometry>
+        </collision>
+        <visual name="Panda_link2_visual">
+            <origin xyz="-0.000003 -0.069489 0.037185" rpy="1.570815 3.141593 -3.141586" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link2_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_link2_visual_material">
+                <color rgba="0.980000 0.980000 1.000000 1.0" />
+            </material>
+        </visual>
+    </link>
+    <joint name="Panda_joint3" type="revolute">
+        <axis xyz="0 0 1" />
+        <limit upper="2.8973000049591" velocity="2.1749999523163" effort="87.0" lower="-2.8973000049591" />
+        <parent link="Panda_link2_respondable" />
+        <child link="Panda_link3_respondable" />
+        <origin xyz="0.000000 -0.316000 0.000000" rpy="-1.570797 3.141593 -3.141593" />
+    </joint>
+    <link name="Panda_link3_respondable">
+        <inertial>
+            <origin xyz="0.044348 0.024928 -0.038130" rpy="2.437308 3.367734 1.805683" />
+            <inertia ixz="-1.0842021724855e-18" iyz="0.0" ixy="9.6222942808089e-18" ixx="0.099999997764826" iyy="0.099999997764826" izz="0.099999997764826" />
+            <mass value="0.625" />
+        </inertial>
+        <collision name="Panda_link3_respondable">
+            <origin xyz="0.033417 0.026635 -0.041390" rpy="2.437308 3.367734 1.805683" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link3_respondable_coll_1.dae" />
+            </geometry>
+        </collision>
+        <visual name="Panda_link3_visual">
+            <origin xyz="0.033546 0.026996 -0.041713" rpy="2.413011 3.312717 1.843472" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link3_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_link3_visual_material">
+                <color rgba="0.980000 0.980000 0.980000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link3_visual">
+            <origin xyz="0.033546 0.026996 -0.041713" rpy="2.413011 3.312717 1.843472" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link3_visual_vis_2.dae" />
+            </geometry>
+            <material name="Panda_link3_visual_material">
+                <color rgba="0.400000 0.400000 0.400000 1.0" />
+            </material>
+        </visual>
+    </link>
+    <joint name="Panda_joint4" type="revolute">
+        <axis xyz="0 0 1" />
+        <limit upper="0.0" velocity="2.1749999523163" effort="87.0" lower="-3.0020000934601" />
+        <parent link="Panda_link3_respondable" />
+        <child link="Panda_link4_respondable" />
+        <origin xyz="0.082500 -0.000000 -0.000000" rpy="-1.570796 3.141593 3.141593" />
+    </joint>
+    <link name="Panda_link4_respondable">
+        <inertial>
+            <origin xyz="-0.038550 0.039526 0.024716" rpy="3.014416 4.390686 -0.783388" />
+            <inertia ixz="-2.168404344971e-18" iyz="2.168404344971e-18" ixy="3.6591823321386e-18" ixx="0.099999997764826" iyy="0.099999997764826" izz="0.099999997764826" />
+            <mass value="0.625" />
+        </inertial>
+        <collision name="Panda_link4_respondable">
+            <origin xyz="-0.049425 0.042430 0.026629" rpy="3.014416 4.390686 -0.783388" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link4_respondable_coll_1.dae" />
+            </geometry>
+        </collision>
+        <visual name="Panda_link4_visual">
+            <origin xyz="-0.042981 0.050021 0.026925" rpy="3.123437 4.394695 -0.661518" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link4_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_link4_visual_material">
+                <color rgba="0.400000 0.400000 0.400000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link4_visual">
+            <origin xyz="-0.042981 0.050021 0.026925" rpy="3.123437 4.394695 -0.661518" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link4_visual_vis_2.dae" />
+            </geometry>
+            <material name="Panda_link4_visual_material">
+                <color rgba="0.980000 0.980000 0.980000 1.0" />
+            </material>
+        </visual>
+    </link>
+    <joint name="Panda_joint5" type="revolute">
+        <axis xyz="0 0 1" />
+        <limit upper="2.8973000049591" velocity="2.6099998950958" effort="12.0" lower="-2.8973000049591" />
+        <parent link="Panda_link4_respondable" />
+        <child link="Panda_link5_respondable" />
+        <origin xyz="-0.082081 0.383554 -0.000219" rpy="1.570796 3.141591 -3.141592" />
+    </joint>
+    <link name="Panda_link5_respondable">
+        <inertial>
+            <origin xyz="0.000256 0.057004 -0.098617" rpy="-3.126116 3.390447 1.553267" />
+            <inertia ixz="5.4210108624275e-19" iyz="0.0" ixy="5.0821976835258e-20" ixx="0.099999997764826" iyy="0.099999997764826" izz="0.099999997764826" />
+            <mass value="0.625" />
+        </inertial>
+        <collision name="Panda_link5_respondable">
+            <origin xyz="-0.001682 0.042777 -0.108705" rpy="-3.126116 3.390447 1.553267" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link5_respondable_coll_1.dae" />
+            </geometry>
+        </collision>
+        <collision name="Panda_link5_respondable">
+            <origin xyz="-0.001682 0.042777 -0.108705" rpy="-3.126116 3.390447 1.553267" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link5_respondable_coll_2.dae" />
+            </geometry>
+        </collision>
+        <collision name="Panda_link5_respondable">
+            <origin xyz="-0.001682 0.042777 -0.108705" rpy="-3.126116 3.390447 1.553267" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link5_respondable_coll_3.dae" />
+            </geometry>
+        </collision>
+        <collision name="Panda_link5_respondable">
+            <origin xyz="-0.001682 0.042777 -0.108705" rpy="-3.126116 3.390447 1.553267" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link5_respondable_coll_4.dae" />
+            </geometry>
+        </collision>
+        <collision name="Panda_link5_respondable">
+            <origin xyz="-0.001682 0.042777 -0.108705" rpy="-3.126116 3.390447 1.553267" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link5_respondable_coll_5.dae" />
+            </geometry>
+        </collision>
+        <collision name="Panda_link5_respondable">
+            <origin xyz="-0.001682 0.042777 -0.108705" rpy="-3.126116 3.390447 1.553267" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link5_respondable_coll_6.dae" />
+            </geometry>
+        </collision>
+        <collision name="Panda_link5_respondable">
+            <origin xyz="-0.001682 0.042777 -0.108705" rpy="-3.126116 3.390447 1.553267" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link5_respondable_coll_7.dae" />
+            </geometry>
+        </collision>
+        <visual name="Panda_link5_visual">
+            <origin xyz="0.000827 0.042090 -0.108562" rpy="0.046023 3.382035 1.396010" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link5_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_link5_visual_material">
+                <color rgba="0.400000 0.400000 0.400000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link5_visual">
+            <origin xyz="0.000827 0.042090 -0.108562" rpy="0.046023 3.382035 1.396010" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link5_visual_vis_2.dae" />
+            </geometry>
+            <material name="Panda_link5_visual_material">
+                <color rgba="0.980000 0.980000 0.980000 1.0" />
+            </material>
+        </visual>
+    </link>
+    <joint name="Panda_joint6" type="revolute">
+        <axis xyz="0 0 1" />
+        <limit upper="3.752499980852" velocity="2.6099998950958" effort="12.0" lower="-0.017500000074506" />
+        <parent link="Panda_link5_respondable" />
+        <child link="Panda_link6_respondable" />
+        <origin xyz="0.000000 -0.000000 0.000000" rpy="-1.570795 3.141593 3.141593" />
+    </joint>
+    <link name="Panda_link6_respondable">
+        <inertial>
+            <origin xyz="0.051002 0.006933 0.006169" rpy="-3.136481 4.494420 3.134962" />
+            <inertia ixz="0.0" iyz="-2.168404344971e-18" ixy="-1.3552527156069e-19" ixx="0.099999997764826" iyy="0.099999997764826" izz="0.099999997764826" />
+            <mass value="0.625" />
+        </inertial>
+        <collision name="Panda_link6_respondable">
+            <origin xyz="0.042092 0.015160 0.010259" rpy="-3.136481 4.494420 3.134962" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link6_respondable_coll_1.dae" />
+            </geometry>
+        </collision>
+        <visual name="Panda_link6_visual">
+            <origin xyz="0.042200 0.014913 0.010711" rpy="-0.055967 1.789478 -0.056827" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link6_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_link6_visual_material">
+                <color rgba="0.400000 0.400000 0.400000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link6_visual">
+            <origin xyz="0.042200 0.014913 0.010711" rpy="-0.055967 1.789478 -0.056827" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link6_visual_vis_2.dae" />
+            </geometry>
+            <material name="Panda_link6_visual_material">
+                <color rgba="0.980000 0.980000 0.980000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link6_visual">
+            <origin xyz="0.042200 0.014913 0.010711" rpy="-0.055967 1.789478 -0.056827" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link6_visual_vis_3.dae" />
+            </geometry>
+            <material name="Panda_link6_visual_material">
+                <color rgba="0.400000 0.400000 0.400000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link6_visual">
+            <origin xyz="0.042200 0.014913 0.010711" rpy="-0.055967 1.789478 -0.056827" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link6_visual_vis_4.dae" />
+            </geometry>
+            <material name="Panda_link6_visual_material">
+                <color rgba="0.400000 0.400000 0.400000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link6_visual">
+            <origin xyz="0.042200 0.014913 0.010711" rpy="-0.055967 1.789478 -0.056827" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link6_visual_vis_5.dae" />
+            </geometry>
+            <material name="Panda_link6_visual_material">
+                <color rgba="0.300000 0.300000 0.300000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link6_visual">
+            <origin xyz="0.042200 0.014913 0.010711" rpy="-0.055967 1.789478 -0.056827" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link6_visual_vis_6.dae" />
+            </geometry>
+            <material name="Panda_link6_visual_material">
+                <color rgba="0.740000 0.740000 0.740000 1.0" />
+            </material>
+        </visual>
+    </link>
+    <joint name="Panda_joint7" type="revolute">
+        <axis xyz="0 0 1" />
+        <limit upper="2.8973000049591" velocity="2.6099998950958" effort="12.0" lower="-2.8973000049591" />
+        <parent link="Panda_link6_respondable" />
+        <child link="Panda_link7_respondable" />
+        <origin xyz="0.088000 0.000000 0.000000" rpy="-1.570797 3.141593 -3.141593" />
+    </joint>
+    <link name="Panda_link7_respondable">
+        <inertial>
+            <origin xyz="0.010361 0.010359 0.079108" rpy="0.785150 -1.570796 0.000000" />
+            <inertia ixz="0.0" iyz="1.6940658945086e-20" ixy="2.1175823681358e-21" ixx="0.099999997764826" iyy="0.099999997764826" izz="0.099999997764826" />
+            <mass value="0.625" />
+        </inertial>
+        <collision name="Panda_link7_respondable">
+            <origin xyz="0.012024 0.012042 0.079414" rpy="0.785150 -1.570796 0.000000" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link7_respondable_coll_1.dae" />
+            </geometry>
+        </collision>
+        <visual name="Panda_link7_visual">
+            <origin xyz="0.012130 0.012099 0.079401" rpy="2.356442 1.570796 0.000000" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link7_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_link7_visual_material">
+                <color rgba="0.400000 0.400000 0.400000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link7_visual">
+            <origin xyz="0.012130 0.012099 0.079401" rpy="2.356442 1.570796 0.000000" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link7_visual_vis_2.dae" />
+            </geometry>
+            <material name="Panda_link7_visual_material">
+                <color rgba="0.980000 0.980000 0.980000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link7_visual">
+            <origin xyz="0.012130 0.012099 0.079401" rpy="2.356442 1.570796 0.000000" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link7_visual_vis_3.dae" />
+            </geometry>
+            <material name="Panda_link7_visual_material">
+                <color rgba="0.700000 0.700000 0.700000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link7_visual">
+            <origin xyz="0.012130 0.012099 0.079401" rpy="2.356442 1.570796 0.000000" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link7_visual_vis_4.dae" />
+            </geometry>
+            <material name="Panda_link7_visual_material">
+                <color rgba="0.400000 0.400000 0.400000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_link7_visual">
+            <origin xyz="0.012130 0.012099 0.079401" rpy="2.356442 1.570796 0.000000" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_link7_visual_vis_5.dae" />
+            </geometry>
+            <material name="Panda_link7_visual_material">
+                <color rgba="0.400000 0.400000 0.400000 1.0" />
+            </material>
+        </visual>
+    </link>
+    <joint name="Panda_attachment" type="fixed">
+        <axis xyz="0 0 1" />
+        <parent link="Panda_link7_respondable" />
+        <child link="Panda_gripper" />
+        <origin xyz="-0.000000 -0.000000 0.107000" rpy="-3.141592 3.141593 -1.570795" />
+    </joint>
+    <link name="Panda_gripper">
+        <inertial>
+            <origin xyz="0.000819 -0.000828 0.021778" rpy="3.141592 3.141593 0.785397" />
+            <inertia ixz="-5.6910026143648e-21" iyz="6.505213034913e-18" ixy="0.0" ixx="0.099999997764826" iyy="0.099999997764826" izz="0.099999997764826" />
+            <mass value="0.625" />
+        </inertial>
+        <collision name="Panda_gripper">
+            <origin xyz="-0.000000 0.000002 0.017867" rpy="3.141592 3.141593 0.785397" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_gripper_coll_1.dae" />
+            </geometry>
+        </collision>
+        <visual name="Panda_gripper_visual">
+            <origin xyz="-0.000063 -0.000203 0.018002" rpy="-1.571379 3.159396 -2.356337" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_gripper_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_gripper_visual_material">
+                <color rgba="0.700000 0.700000 0.700000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_gripper_visual">
+            <origin xyz="-0.000063 -0.000203 0.018002" rpy="-1.571379 3.159396 -2.356337" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_gripper_visual_vis_2.dae" />
+            </geometry>
+            <material name="Panda_gripper_visual_material">
+                <color rgba="0.100000 0.100000 0.100000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_gripper_visual">
+            <origin xyz="-0.000063 -0.000203 0.018002" rpy="-1.571379 3.159396 -2.356337" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_gripper_visual_vis_3.dae" />
+            </geometry>
+            <material name="Panda_gripper_visual_material">
+                <color rgba="0.100000 0.100000 0.100000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_gripper_visual">
+            <origin xyz="-0.000063 -0.000203 0.018002" rpy="-1.571379 3.159396 -2.356337" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_gripper_visual_vis_4.dae" />
+            </geometry>
+            <material name="Panda_gripper_visual_material">
+                <color rgba="0.700000 0.700000 0.700000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_gripper_visual">
+            <origin xyz="-0.000063 -0.000203 0.018002" rpy="-1.571379 3.159396 -2.356337" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_gripper_visual_vis_5.dae" />
+            </geometry>
+            <material name="Panda_gripper_visual_material">
+                <color rgba="0.980000 0.980000 0.980000 1.0" />
+            </material>
+        </visual>
+    </link>
+
+
+    <joint name="Panda_gripper_joint1" type="prismatic">
+        <axis xyz="0 0 1" />
+        <limit upper="0.04" velocity="0.20000000298023" effort="20.0" lower="0.0" />
+        <parent link="Panda_gripper" />
+        <child link="Panda_leftfinger_respondable" />
+        <origin xyz="0.001252 -0.001265 0.056248" rpy="1.570795 3.141593 0.785397" />
+    </joint>
+    <link name="Panda_leftfinger_respondable">
+        <contact>
+          <friction_anchor/>
+          <stiffness value="30000.0"/>
+          <damping value="1000.0"/>
+          <spinning_friction value="0.1"/>
+          <lateral_friction value="1.0"/>
+        </contact>
+        
+        <inertial>
+            <origin xyz="-0.000127 -0.032800 0.010514" rpy="1.570798 3.141593 3.141592" />
+            <mass value="0.1"/>
+       <inertia ixx="0.1" ixy="0" ixz="0" iyy="0.1" iyz="0" izz="0.1"/>
+        </inertial>
+        <collision name="Panda_leftfinger_respondable">
+            <origin xyz="-0.000127 -0.032800 0.010514" rpy="1.570798 3.141593 3.141592" />
+            <geometry>
+                <box size="0.020000 0.020000 0.040000" />
+            </geometry>
+        </collision>
+        <visual name="Panda_leftfinger_visual">
+            <origin xyz="0.000008 -0.026877 0.012377" rpy="0.012202 4.625336 1.558928" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_leftfinger_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_leftfinger_visual_material">
+                <color rgba="0.700000 0.700000 0.700000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_leftfinger_visual">
+            <origin xyz="0.000008 -0.026877 0.012377" rpy="0.012202 4.625336 1.558928" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_leftfinger_visual_vis_2.dae" />
+            </geometry>
+            <material name="Panda_leftfinger_visual_material">
+                <color rgba="0.100000 0.100000 0.100000 1.0" />
+            </material>
+        </visual>
+    </link>
+
+    <joint name="Panda_gripper_joint2" type="prismatic">
+        <axis xyz="0 0 1" />
+        <limit upper="0.05" velocity="0.20000000298023" effort="20.0" lower="0.0" />
+        <parent link="Panda_gripper" />
+        <child link="Panda_rightfinger_respondable" />
+        <origin xyz="0.001252 -0.001265 0.056248" rpy="-1.570797 3.141593 0.785397" />
+        <mimic joint="Panda_gripper_joint1"/>
+    </joint>
+    <link name="Panda_rightfinger_respondable">
+        <contact>
+          <friction_anchor/>
+          <stiffness value="30000.0"/>
+          <damping value="1000.0"/>
+          <spinning_friction value="0.1"/>
+          <lateral_friction value="1.0"/>
+        </contact>
+        <inertial>
+            <origin xyz="-0.000035 0.032737 0.010537" rpy="-1.570796 3.141593 -3.141592" />
+           <mass value="0.1"/>
+       <inertia ixx="0.1" ixy="0" ixz="0" iyy="0.1" iyz="0" izz="0.1"/>
+        </inertial>
+        <collision name="Panda_rightfinger_respondable">
+            <origin xyz="-0.000035 0.032737 0.010537" rpy="-1.570796 3.141593 -3.141592" />
+            <geometry>
+                <box size="0.020000 0.020000 0.040000" />
+            </geometry>
+        </collision>
+        <visual name="Panda_rightfinger_visual">
+            <origin xyz="-0.000004 0.026907 0.012652" rpy="-3.132696 4.641150 -1.579601" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_rightfinger_visual_vis_1.dae" />
+            </geometry>
+            <material name="Panda_rightfinger_visual_material">
+                <color rgba="0.700000 0.700000 0.700000 1.0" />
+            </material>
+        </visual>
+        <visual name="Panda_rightfinger_visual">
+            <origin xyz="-0.000004 0.026907 0.012652" rpy="-3.132696 4.641150 -1.579601" />
+            <geometry>
+                <mesh filename="file://assets/franka_panda/Panda_rightfinger_visual_vis_2.dae" />
+            </geometry>
+            <material name="Panda_rightfinger_visual_material">
+                <color rgba="0.100000 0.100000 0.100000 1.0" />
+            </material>
+        </visual>
+    </link>
+    <link name="panda_gripper_target">
+        <inertial>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <mass value="0.0"/>
+            <inertia ixx="0.1" ixy="0" ixz="0" iyy="0.1" iyz="0" izz="0.1"/>
+        </inertial>
+        <visual name="panda_gripper_target_visual">
+          <geometry>
+            <sphere radius="0.01"/>
+          </geometry>
+          <material name="panda_gripper_target_visual_material">
+                <color rgba="1.000000 1.000000 0.100000 1.0" />
+          </material>
+        </visual>
+    </link>
+    <joint name="panda_grasptarget_hand" type="fixed">
+        <parent link="Panda_gripper"/>
+        <child link="panda_gripper_target"/>
+        <origin rpy="0 0 0" xyz="0 0 0.104"/>
+    </joint>
+
+    <link name="panda_wrist_camera">
+        <inertial>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <mass value="0.0"/>
+            <inertia ixx="0.1" ixy="0" ixz="0" iyy="0.1" iyz="0" izz="0.1"/>
+        </inertial>
+        <visual name="panda_wrist_camera_visual">
+          <geometry>
+            <sphere radius="0.01"/>
+          </geometry>
+          <material name="panda_wrist_camera_visual_material">
+                <color rgba="0.000000 0.000000 1.000000 1.0" />
+          </material>
+        </visual>
+    </link>
+    <joint name="panda_wrist_hand" type="fixed">
+        <parent link="Panda_gripper"/>
+        <child link="panda_wrist_camera"/>
+        <origin xyz="-0.03 -0.03 0.02" rpy="0 0 2.356109"/>
+    </joint>
+</robot>

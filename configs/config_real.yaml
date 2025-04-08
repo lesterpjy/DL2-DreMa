@@ -1,0 +1,11 @@
+data:
+  source_path: "/home/leonardo/workspace/git_repo/DreMa/data/erase_color_experiments_1411/erase_color_3/camera1"
+  assets_directory: "output"
+  assets_path: "${data.source_path}/${data.assets_directory}"
+  trajectory_file: "${data.source_path}/dictionary.pkl"
+
+defaults:
+  - simulation: real_world_simulation
+  - training: real_world_params
+
+

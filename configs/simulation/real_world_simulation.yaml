@@ -1,0 +1,71 @@
+visualization:
+  visualize: True
+  visualize_training_cameras: True
+  visualize_trajectory_cameras: False
+  pybullet_camera: True
+  camera_id: 0
+  scale: 1
+  transform_matrix: [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]]
+
+environment:
+  load_environment: True
+  labels_file: "labels.txt"
+  filter_labels: True
+  load_trajectory_cameras: False
+  load_training_cameras: False
+
+objects:
+  objects_list: ["All"]
+  fixed_objects: ["shape_sorter", "shape_sorter_visual"]
+  not_collidable_objects: [""]
+  flat_surface_dir: "flat_surface"
+  flat_surface_file: "flat_surface_mesh.urdf"
+  urdf_dir: "urdf"
+  gaussians_dir: "objects_ply"
+  environment_file: "gaussians.ply" #null #"gaussians.ply"
+
+output:
+  filter_depth: True
+  radius_filter: False
+  threshold: 3
+
+trajectory:
+  offset: [0, 0, 0]
+  load_trajectory: True
+  remove_initial_part_trajectory: True
+  remove_initial_part_trajectory_steps: 30
+  execute_trajectory: False
+  keypoint_threshold: 0.015
+  waypoint_threshold: 0.05
+  trajectory_file: "dictionary.pkl"
+  max_waypoint_steps: 100
+  update_wrist_camera: True
+
+robot:
+  simulate_robot: True
+  robot_urdf: "./assets/franka_panda/panda.urdf"
+  robot_gaussians_dir: "./assets/robot_surf_gaussians"
+  connected_joints: [-1, 0, 1, 2, 3, 4, 5, 6, 7, 9, 8]
+  initial_position: [+3.0895e-01, 0.0000e+00, -8.2002e-01]
+  initial_orientation: [0, 0, 0]
+  initial_gripper_joint_positions: [0.04, 0.04]
+  initial_joint_positions: [2.050e-07, 0.1745, 1.894e-06, -0.8727, -6.537e-06, 1.2217, 0.7854]
+  end_effector_rotation: [0, 0, 45] # xyz euler angles in degrees
+  right_finger_index: 8
+  left_finger_index: 9
+  grasp_index: 10
+  wrist_camera_index: 11
+
+generation:
+  generated_data_path: "./data/generated_data"
+  generate_data: True
+  scale: 4
+  save_images: True
+  rotate_environment: True
+  rotate_environment_step: 30
+  rotation_center: [0.3, 0.0, 0.0]
+  translate_environment: False
+  translation_values: [0, 0.15, -0.15]
+  rotate_objects: True
+  rotation_objects_step: 20
+  threshold: 0.035

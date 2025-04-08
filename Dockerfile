@@ -1,22 +1,25 @@
 FROM lesterpjy10/base-image
 
-# Install required system packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    graphviz \
-    graphviz-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Create required directories
+RUN mkdir -pv /local/src /local/configs /local/scripts /local/work /local/cache /local/assets /local/data /local/drema /local/submodules
 
-RUN mkdir -pv /local/src /local/configs /local/scripts /local/work /local/cache
+# Copy all project files
+COPY . /local/
 
-COPY requirements.txt /local/
-RUN pip install --no-cache-dir -r /local/requirements.txt
+# Install packages from submodules
+WORKDIR /local
+RUN pip install submodules/simple-knn && \
+    pip install submodules/diff-gaussian-rasterization && \
+    pip install submodules/diff-gaussian-rasterization-depth && \
+    pip install submodules/diff-surfel-rasterization
 
-COPY src /local/src
-COPY configs /local/configs
-COPY scripts /local/scripts
+# Install remaining dependencies (including PyTorch)
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Set environment variables
 ENV PYTHONPATH=/local/src
 WORKDIR /local/
 
+# Set up volumes for persistent storage
 VOLUME /local/work
 VOLUME /local/cache
