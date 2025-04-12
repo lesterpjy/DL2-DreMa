@@ -28,6 +28,8 @@ jobs:
             --push \
             --cache-from=type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/refact:cache \
             --cache-to=type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/refact:cache,mode=max \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg DOCKER_BUILDKIT=1 \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/refact:${{ github.ref_name }} \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/refact:latest \
             .
