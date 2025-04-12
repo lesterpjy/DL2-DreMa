@@ -22,13 +22,18 @@ Since `src`, `scripts`, and `configs` directories are mounted in real-time from 
   4. Set test/run alias (Remove `--gpus all` for local without gpu) 
      ```
      alias dtest="docker run --rm -it \
-	 -v $(pwd)/data:/local/data \
-	 -v $(pwd)/cache:/local/cache \
-	 -v $(pwd)/work:/local/work \
-	 -v $(pwd)/src:/local/src \
-	 -v $(pwd)/scripts:/local/scripts \
-	 -v $(pwd)/configs:/local/configs \
-	 --gpus all"
+     -v $(pwd)/data:/local/data \
+     -v $(pwd)/cache:/local/cache \
+     -v $(pwd)/work:/local/work \
+     -v $(pwd)/src:/local/src \
+     -v $(pwd)/scripts:/local/scripts \
+     -v $(pwd)/configs:/local/configs \
+     -v $(pwd)/assets:/local/assets \
+     -v $(pwd)/drema:/local/drema \
+     -v $(pwd)/submodules:/local/submodules \
+     --gpus all"
+     ```
+
   5. Run an interactive test: `dtest lesterpjy10/refact-multiarch:latest bash`
   6. Or, for environment sanity check, run `dtest lesterpjy10/refact-multiarch python scripts/test_env.py` 
  
