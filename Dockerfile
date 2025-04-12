@@ -6,29 +6,30 @@ RUN mkdir -pv /local/src /local/configs /local/scripts /local/work /local/cache 
 # Copy all project files
 COPY . /local/
 
-# Set CUDA environment variables
-ENV CUDA_HOME="/usr/local/cuda"
-ENV PATH="${CUDA_HOME}/bin:${PATH}"
-ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
-
-# Install submodules with CUDA for x86_64 and without for ARM64
-WORKDIR /local
-RUN if [ "$(uname -m)" = "x86_64" ]; then \
-        # On x86_64, build with CUDA support \
-        pip install submodules/simple-knn && \
-        pip install submodules/diff-gaussian-rasterization && \
-        pip install submodules/diff-gaussian-rasterization-depth && \
-        pip install submodules/diff-surfel-rasterization; \
-    else \
-        # On ARM64, build without CUDA using build flags \
-        pip install --no-build-isolation --config-settings="--no-cuda" submodules/simple-knn || pip install --no-build-isolation --config-settings="build-option=--no-cuda" submodules/simple-knn || echo "Failed to install simple-knn, will bind-mount at runtime" && \
-        pip install --no-build-isolation --config-settings="--no-cuda" submodules/diff-gaussian-rasterization || pip install --no-build-isolation --config-settings="build-option=--no-cuda" submodules/diff-gaussian-rasterization || echo "Failed to install diff-gaussian-rasterization, will bind-mount at runtime" && \
-        pip install --no-build-isolation --config-settings="--no-cuda" submodules/diff-gaussian-rasterization-depth || pip install --no-build-isolation --config-settings="build-option=--no-cuda" submodules/diff-gaussian-rasterization-depth || echo "Failed to install diff-gaussian-rasterization-depth, will bind-mount at runtime" && \
-        pip install --no-build-isolation --config-settings="--no-cuda" submodules/diff-surfel-rasterization || pip install --no-build-isolation --config-settings="build-option=--no-cuda" submodules/diff-surfel-rasterization || echo "Failed to install diff-surfel-rasterization, will bind-mount at runtime"; \
-    fi
-
-# Install remaining dependencies
+# Install remaining dependencies from requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Create a setup script that will be run when the container starts
+RUN echo '#!/bin/bash\n\
+# Check if we have CUDA available and try to install extensions\n\
+if [ -d "/usr/local/cuda" ] && [ -f "/usr/local/cuda/bin/nvcc" ]; then\n\
+  export CUDA_HOME="/usr/local/cuda"\n\
+  export PATH="$CUDA_HOME/bin:$PATH"\n\
+  echo "CUDA found at $CUDA_HOME, attempting to install extensions..."\n\
+  cd /local && \\\n\
+  pip install submodules/simple-knn || echo "Failed to install simple-knn"\n\
+  pip install submodules/diff-gaussian-rasterization || echo "Failed to install diff-gaussian-rasterization"\n\
+  pip install submodules/diff-gaussian-rasterization-depth || echo "Failed to install diff-gaussian-rasterization-depth"\n\
+  pip install submodules/diff-surfel-rasterization || echo "Failed to install diff-surfel-rasterization"\n\
+else\n\
+  echo "CUDA not found, extensions will not be installed. Using bind-mounted submodules."\n\
+fi\n\
+\n\
+# Execute the command passed to the container\n\
+exec "$@"' > /local/entrypoint.sh
+
+# Make the entrypoint script executable
+RUN chmod +x /local/entrypoint.sh
 
 # Set environment variables
 ENV PYTHONPATH=/local/src
@@ -37,3 +38,6 @@ WORKDIR /local/
 # Set up volumes for persistent storage
 VOLUME /local/work
 VOLUME /local/cache
+
+# Set the entrypoint
+ENTRYPOINT ["/local/entrypoint.sh"]
