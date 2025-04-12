@@ -6,8 +6,11 @@ RUN mkdir -pv /local/src /local/configs /local/scripts /local/work /local/cache 
 # Copy all project files
 COPY . /local/
 
+# Set working directory
+WORKDIR /local
+
 # Install remaining dependencies from requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r /local/requirements.txt
 
 # Create a setup script that will be run when the container starts
 RUN echo '#!/bin/bash\n\
@@ -33,7 +36,7 @@ RUN chmod +x /local/entrypoint.sh
 
 # Set environment variables
 ENV PYTHONPATH=/local/src
-WORKDIR /local/
+WORKDIR /local
 
 # Set up volumes for persistent storage
 VOLUME /local/work
