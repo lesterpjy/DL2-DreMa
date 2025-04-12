@@ -1,4 +1,4 @@
-name: Build and Push Multi-Arch Linux Image
+name: Build and Push Image
 
 on:
   workflow_dispatch: # for manual trigger on github
@@ -15,20 +15,19 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v3
 
-      - name: Set up QEMU and Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Build & push multi-arch image with cache
+      - name: Build & push amd64 image
         run: |
           docker buildx build \
-            --platform linux/amd64,linux/arm64 \
+            --platform linux/amd64 \
             --push \
-            --cache-from=type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/refact-multiarch:cache \
-            --cache-to=type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/refact-multiarch:cache,mode=max \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/refact-multiarch:${{ github.ref_name }} \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/refact-multiarch:latest \
+            --cache-from=type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/refact:cache \
+            --cache-to=type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/refact:cache,mode=max \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/refact:${{ github.ref_name }} \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/refact:latest \
             .
-
