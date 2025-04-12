@@ -31,7 +31,7 @@ Since `src`, `scripts`, and `configs` directories are mounted in real-time from 
      -v $(pwd)/assets:/local/assets \
      -v $(pwd)/drema:/local/drema \
      -v $(pwd)/submodules:/local/submodules \
-     --gpus all"
+     --gpus all" 
      ```
 
   5. Run an interactive test: `dtest lesterpjy10/refact-multiarch:latest bash`
