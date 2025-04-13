@@ -1,0 +1,127 @@
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
+
+# Set noninteractive installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    curl \
+    wget \
+    unzip \
+    ca-certificates \
+    libopenexr-dev \
+    libgl1-mesa-dev \
+    libgl1-mesa-glx \
+    libglew-dev \
+    libosmesa6-dev \
+    libxrender1 \
+    libsm6 \
+    libxext6 \
+    libglu1-mesa-dev \
+    libxcursor-dev \
+    libxinerama-dev \
+    libxi-dev \
+    libpython3-dev \
+    python3.8 \
+    python3.8-dev \
+    python3-pip \
+    python3.8-venv \
+    python3-numpy \
+    vim \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create required directories
+RUN mkdir -pv /local/src /local/configs /local/scripts /local/work /local/cache /local/assets /local/data /local/drema /local/submodules /root/install
+
+# Set CUDA environment variables
+ENV CUDA_HOME="/usr/local/cuda"
+ENV PATH="${CUDA_HOME}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+
+# Set Python 3.8 as default
+RUN ln -sf /usr/bin/python3.8 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3 /usr/bin/python && \
+    ln -sf /usr/bin/pip3 /usr/bin/pip
+
+# Upgrade pip
+RUN pip install --upgrade pip==23.0.1
+
+# Use locally available CoppeliaSim file
+WORKDIR /root/install
+# Copy the CoppeliaSim file from local context to the container
+COPY CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz /root/install/
+# Extract CoppeliaSim
+RUN mkdir -p /opt/coppeliaSim && \
+    tar -xf CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz -C /opt/coppeliaSim --strip-components=1 && \
+    rm CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz
+
+# Set CoppeliaSim environment variables
+ENV COPPELIASIM_ROOT=/opt/coppeliaSim
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$COPPELIASIM_ROOT
+ENV QT_QPA_PLATFORM_PLUGIN_PATH=$COPPELIASIM_ROOT
+
+# Clone and install PyRep
+WORKDIR /root/install
+RUN git clone https://github.com/stepjam/PyRep.git && \
+    cd PyRep && \
+    pip install -r requirements.txt && \
+    pip install .
+
+# Clone and install RLBench (peract fork)
+WORKDIR /root/install
+RUN git clone -b peract https://github.com/MohitShridhar/RLBench.git && \
+    cd RLBench && \
+    pip install -r requirements.txt && \
+    python setup.py develop
+
+# Clone and install YARR (peract fork, custom req to to deal with package compatibility)
+WORKDIR /root/install
+RUN git clone -b peract https://github.com/MohitShridhar/YARR.git && \
+    cd YARR && \
+    pip install --no-deps -e . && \
+    # Install dependencies in batches to manage conflicts
+    pip install tensorboard moviepy natsort psutil timeout-decorator pyrender==0.1.45 && \
+    pip install 'omegaconf<2.1,>=2.0.0' && \
+    pip install hydra-core==1.0.5 pandas==1.4.1 opencv-python
+
+# Clone and install PerAct
+WORKDIR /root/install
+RUN git clone https://github.com/peract/peract.git && \
+    cd peract && \
+    pip install git+https://github.com/openai/CLIP.git
+
+# Install PerAct requirements
+WORKDIR /root/install/peract
+COPY requirements_peract.txt .
+RUN pip install -r requirements_peract.txt
+
+# Explicitly install torch and torchvision compatible with CUDA 11.8
+RUN pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117
+
+# Install pytorch3d (specific version from requirements.txt)
+RUN pip install pytorch3d==0.3.0
+
+# Finish PerAct installation
+RUN python setup.py develop
+
+# Set PerAct environment variable
+ENV PERACT_ROOT=/root/install/peract
+
+# Set PYTHONPATH to include all necessary directories
+ENV PYTHONPATH=/local/src:/root/install/peract:/root/install/RLBench:/root/install/YARR:/root/install/PyRep
+
+# Copy all project files (if needed)
+WORKDIR /local
+COPY . /local/
+
+# Set up volumes for persistent storage
+VOLUME /local/work
+VOLUME /local/cache
+VOLUME /local/data
+
+# Set default working directory
+WORKDIR /local/
