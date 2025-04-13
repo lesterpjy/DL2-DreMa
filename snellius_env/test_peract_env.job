@@ -33,7 +33,7 @@ apptainer run --nv \
     -B $(pwd)/drema:/local/drema \
     -B $(pwd)/submodules:/local/submodules \
     ./peract-latest.sif \
-    python /local/scripts/test_peract_env.py
+    /usr/local/bin/opengl_setup.sh python /local/scripts/test_peract_env.py
 
 # Run the PyRep test
 echo "2. Testing PyRep with CoppeliaSim..."
@@ -49,6 +49,6 @@ apptainer run --nv \
     -B $(pwd)/drema:/local/drema \
     -B $(pwd)/submodules:/local/submodules \
     ./peract-latest.sif \
-    python /local/scripts/test_pyrep.py
+    /usr/local/bin/opengl_setup.sh python /local/scripts/test_pyrep.py
 
 echo "PerAct environment tests completed!"

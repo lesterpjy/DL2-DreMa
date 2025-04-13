@@ -143,6 +143,11 @@ ENV PYTHONPATH="/root/install/peract:/root/install/RLBench:/root/install/YARR:/r
 # Test that we can import modules directly as used in eval.py
 RUN cd /root/install/peract && \
     python -c "from agents import peract_bc; from helpers import utils; print('Imports successful!')"
+
+# Copy OpenGL wrapper script and make it executable
+COPY opengl_setup.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/opengl_setup.sh
+
 # Copy all project files (if needed)
 WORKDIR /local
 COPY . /local/
