@@ -8,10 +8,10 @@ module purge
 module load 2023
 # Possibly: module load Apptainer/<version>
 
-export APPTAINER_TMPDIR=$(mktemp -d /tmp/user01XXXX)
+export APPTAINER_TMPDIR=$(mktemp -d /tmp/scur2683XXXX)
 
 # Name of the resulting SIF file
-SIF_FILE="refact-multiarch-latest.sif"
+SIF_FILE="peract-latest.sif"
 
 # Check if the file exists
 if [[ -f "$SIF_FILE" ]]; then
@@ -20,7 +20,7 @@ if [[ -f "$SIF_FILE" ]]; then
 fi
 
 echo "Pulling the Docker image and converting to SIF..."
-apptainer pull "$SIF_FILE" docker://lesterpjy10/refact-multiarch:latest
+apptainer pull "$SIF_FILE" docker://lesterpjy10/peract:latest
 
 echo "Done! SIF file is saved as '$SIF_FILE'."
 

@@ -1,0 +1,126 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_a100          # Partition name
+#SBATCH --gres=gpu:1                  # Number of GPUs to allocate
+#SBATCH --cpus-per-task=9             # Number of CPU cores per task
+#SBATCH --gpus=1                      # This line is sometimes optional/redundant
+#SBATCH --job-name=peract_quickstart  # Job name
+#SBATCH --ntasks=1                    # Number of tasks
+#SBATCH --time=04:00:00               # Time limit hh:mm:ss (quickstart might take longer)
+#SBATCH --mem=32000M                  # Memory pool for all cores (32GB)
+#SBATCH --output=work/peract_quickstart_%A.out  # Standard output
+
+### --- MODULE SETUP / ENVIRONMENT ---
+module purge
+module load 2023
+# Uncomment if your cluster requires Apptainer module
+# module load Apptainer/<VERSION>
+
+### --- PREPARE DIRECTORIES ---
+mkdir -p work data/val scripts
+
+### --- CREATE DOWNLOAD SCRIPT ---
+cat > scripts/quickstart_download_script.sh << 'EOF'
+#!/bin/bash
+# Download PerAct checkpoint
+mkdir -p /root/install/peract/ckpts
+cd /root/install/peract
+wget https://github.com/peract/peract/releases/download/v1.0.0/peract_600k.zip
+unzip peract_600k.zip -d ckpts/
+rm peract_600k.zip
+echo "Checkpoint downloaded successfully"
+EOF
+
+chmod +x scripts/quickstart_download_script.sh
+
+### --- CREATE DATA GENERATION SCRIPT ---
+cat > scripts/generate_data.sh << 'EOF'
+#!/bin/bash
+cd /root/install/RLBench/tools
+python dataset_generator.py --tasks=open_drawer \
+                          --save_path=/root/install/peract/data/val \
+                          --image_size=128,128 \
+                          --renderer=opengl \
+                          --episodes_per_task=10 \
+                          --processes=1 \
+                          --all_variations=True
+echo "Validation data generated successfully"
+EOF
+
+chmod +x scripts/generate_data.sh
+
+### --- CREATE EVALUATION SCRIPT ---
+cat > scripts/run_eval.sh << 'EOF'
+#!/bin/bash
+cd /root/install/peract
+CUDA_VISIBLE_DEVICES=0 python eval.py \
+    rlbench.tasks=[open_drawer] \
+    rlbench.task_name='multi' \
+    rlbench.demo_path=/root/install/peract/data/val \
+    framework.gpu=0 \
+    framework.logdir=/root/install/peract/ckpts/ \
+    framework.start_seed=0 \
+    framework.eval_envs=1 \
+    framework.eval_from_eps_number=0 \
+    framework.eval_episodes=10 \
+    framework.csv_logging=True \
+    framework.tensorboard_logging=True \
+    framework.eval_type='last' \
+    rlbench.headless=True
+echo "Evaluation completed"
+EOF
+
+chmod +x scripts/run_eval.sh
+
+### --- RUN THE CONTAINER WITH QUICKSTART TEST ---
+echo "Starting PerAct quickstart test..."
+
+# Step 1: Download the checkpoint
+echo "1. Downloading pre-trained checkpoint..."
+apptainer exec --nv \
+    --pwd /local/work \
+    -B $(pwd)/data:/local/data \
+    -B $(pwd)/cache:/local/cache \
+    -B $(pwd)/work:/local/work \
+    -B $(pwd)/src:/local/src \
+    -B $(pwd)/scripts:/local/scripts \
+    -B $(pwd)/configs:/local/configs \
+    -B $(pwd)/assets:/local/assets \
+    -B $(pwd)/drema:/local/drema \
+    -B $(pwd)/submodules:/local/submodules \
+    ./peract-latest.sif \
+    /local/scripts/quickstart_download_script.sh
+
+# Step 2: Generate validation data
+echo "2. Generating validation data..."
+apptainer exec --nv \
+    --pwd /local/work \
+    -B $(pwd)/data:/local/data \
+    -B $(pwd)/cache:/local/cache \
+    -B $(pwd)/work:/local/work \
+    -B $(pwd)/src:/local/src \
+    -B $(pwd)/scripts:/local/scripts \
+    -B $(pwd)/configs:/local/configs \
+    -B $(pwd)/assets:/local/assets \
+    -B $(pwd)/drema:/local/drema \
+    -B $(pwd)/submodules:/local/submodules \
+    ./peract-latest.sif \
+    /local/scripts/generate_data.sh
+
+# Step 3: Run evaluation
+echo "3. Running evaluation on pre-trained checkpoint..."
+apptainer exec --nv \
+    --pwd /local/work \
+    -B $(pwd)/data:/local/data \
+    -B $(pwd)/cache:/local/cache \
+    -B $(pwd)/work:/local/work \
+    -B $(pwd)/src:/local/src \
+    -B $(pwd)/scripts:/local/scripts \
+    -B $(pwd)/configs:/local/configs \
+    -B $(pwd)/assets:/local/assets \
+    -B $(pwd)/drema:/local/drema \
+    -B $(pwd)/submodules:/local/submodules \
+    ./peract-latest.sif \
+    /local/scripts/run_eval.sh
+
+echo "PerAct quickstart test completed!"
