@@ -157,14 +157,32 @@ try:
 except Exception as e:
     print(f"❌ YARR error: {e}")
 
-# Check PerAct
-print("\nTesting PerAct import...")
+# Check PerAct modules (as used in eval.py)
+print("\nTesting PerAct modules...")
 try:
-    import peract
+    # Change to the PerAct root directory
+    os.chdir(os.environ.get("PERACT_ROOT", "/root/install/peract"))
 
-    print("✅ PerAct is properly installed")
+    # Import specific modules as used in eval.py
+    from agents import peract_bc
+
+    print("✅ agents.peract_bc import successful")
+
+    from agents import c2farm_lingunet_bc
+
+    print("✅ agents.c2farm_lingunet_bc import successful")
+
+    from helpers import utils
+
+    print("✅ helpers.utils import successful")
+
+    from helpers.custom_rlbench_env import CustomRLBenchEnv
+
+    print("✅ helpers.custom_rlbench_env import successful")
+
+    print("✅ All PerAct modules are properly accessible")
 except Exception as e:
-    print(f"❌ PerAct error: {e}")
+    print(f"❌ PerAct modules error: {e}")
 
 # Check if CoppeliaSim is available
 print("\nChecking CoppeliaSim installation...")
@@ -184,11 +202,35 @@ if os.environ.get("COPPELIASIM_ROOT"):
 else:
     print("❌ COPPELIASIM_ROOT environment variable not set")
 
+# Check if eval.py exists and is runnable
+print("\nChecking eval.py...")
+try:
+    peract_root = os.environ.get("PERACT_ROOT", "/root/install/peract")
+    eval_path = os.path.join(peract_root, "eval.py")
+    if os.path.exists(eval_path):
+        print(f"✅ eval.py found at {eval_path}")
+
+        # Check if the script can be imported (syntax check)
+        with open(eval_path, "r") as f:
+            script_content = f.read()
+        compile(script_content, eval_path, "exec")
+        print("✅ eval.py syntax is valid")
+    else:
+        print(f"❌ eval.py not found at {eval_path}")
+except Exception as e:
+    print(f"❌ Error checking eval.py: {e}")
+
 # Overall summary
 print_section("Overall Summary")
 print("This script checked the basic environment setup for PerAct.")
 print(
-    "If all components show as installed with proper versions, your container is set up correctly."
+    "PerAct is NOT a standard Python package that can be imported directly with 'import peract'."
+)
+print(
+    "Instead, it's a collection of modules that must be imported from specific paths."
+)
+print(
+    "If all component imports show as successful, your container is set up correctly."
 )
 print(
     "If any errors appeared, they will need to be addressed before running the quickstart test."

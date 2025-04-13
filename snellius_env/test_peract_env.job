@@ -16,14 +16,6 @@ module load 2023
 # Uncomment if your cluster requires Apptainer module
 # module load Apptainer/<VERSION>
 
-### --- PREPARE DIRECTORIES ---
-
-### --- COPY TEST ENVIRONMENT SCRIPT ---
-
-### --- ADDITIONAL TEST SCRIPTS ---
-
-# Create a script to test PyRep and CoppeliaSim connection
-
 ### --- RUN THE ENVIRONMENT TESTS ---
 echo "Starting PerAct environment tests..."
 

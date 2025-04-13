@@ -169,7 +169,7 @@ cleanup() {
 # Main execution
 clear
 echo "${BOLD}${BLUE}=========================================${RESET}"
-echo "${BOLD}${BLUE}    ML Project Docker Build Script      ${RESET}"
+echo "${BOLD}${BLUE}      Project Docker Build Script        ${RESET}"
 echo "${BOLD}${BLUE}=========================================${RESET}"
 
 # Check prerequisites
