@@ -17,7 +17,6 @@ module load 2023
 # module load Apptainer/<VERSION>
 
 ### --- PREPARE DIRECTORIES ---
-mkdir -p work scripts
 
 ### --- COPY TEST ENVIRONMENT SCRIPT ---
 
