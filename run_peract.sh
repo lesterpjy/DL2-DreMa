@@ -1,14 +1,16 @@
 #!/bin/bash
-# OpenGL environment setup script for Singularity/Apptainer containers
-# This helps isolate container OpenGL from host OpenGL to avoid GLIBC version conflicts
-# and enforces headless mode for compute clusters
+# Complete PerAct runner script with OpenGL environment setup
+# Combines both general OpenGL setup and PerAct-specific setup
 
 # Display current OpenGL libraries path
 echo "Current LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 
-# Force headless/offscreen mode for Qt applications (like CoppeliaSim)
+# Force headless/offscreen mode for Qt applications
 export QT_QPA_PLATFORM=offscreen
-echo "Set QT_QPA_PLATFORM=offscreen for headless operation"
+export PYOPENGL_PLATFORM=egl
+export LIBGL_ALWAYS_SOFTWARE=1
+export QT_LOGGING_RULES="*.debug=false"
+echo "Set headless mode environment variables"
 
 # Check if running inside Singularity/Apptainer
 if [ -n "$SINGULARITY_CONTAINER" ] || [ -n "$APPTAINER_CONTAINER" ]; then
@@ -27,26 +29,23 @@ if [ -n "$SINGULARITY_CONTAINER" ] || [ -n "$APPTAINER_CONTAINER" ]; then
     export __EGL_VENDOR_LIBRARY_DIRS="/usr/share/glvnd/egl_vendor.d"
     export __GLX_VENDOR_LIBRARY_NAME="mesa"
     
-    # Configure for headless operation
-    export PYOPENGL_PLATFORM=egl
-    export LIBGL_ALWAYS_SOFTWARE=1
-    
     # Set vars to prefer container libraries
     export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib:$LD_LIBRARY_PATH"
     
     echo "Updated LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
-    echo "Configured for headless OpenGL operation"
 else
     echo "Not running in Singularity/Apptainer container, no changes made"
 fi
 
-# Disable Qt debug messages
-export QT_LOGGING_RULES="*.debug=false"
+# Change to PerAct directory
+cd $PERACT_ROOT
+echo "Changed to PerAct directory: $PERACT_ROOT"
 
-echo "OpenGL environment setup complete"
-
-# Execute the command passed to this script
+# Run the provided command
 if [ $# -gt 0 ]; then
     echo "Executing: $@"
     exec "$@"
+else
+    echo "No command provided. Please specify a command to run."
+    exit 1
 fi

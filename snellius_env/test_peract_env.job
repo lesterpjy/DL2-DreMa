@@ -16,10 +16,18 @@ module load 2023
 # Uncomment if your cluster requires Apptainer module
 # module load Apptainer/<VERSION>
 
+### --- PREPARE DIRECTORY STRUCTURE ---
+echo "Setting up directory structure..."
+mkdir -p data cache work src scripts configs assets drema submodules
+
+# Copy test scripts to the scripts directory if needed
+cp test_peract_env.py scripts/ 2>/dev/null || true
+cp test_pyrep.py scripts/ 2>/dev/null || true
+
 ### --- RUN THE ENVIRONMENT TESTS ---
 echo "Starting PerAct environment tests..."
 
-# Run the environment test script
+# Run the environment test script (package verification only)
 echo "1. Running package verification test..."
 apptainer run --nv \
     --pwd /local/work \
@@ -33,10 +41,10 @@ apptainer run --nv \
     -B $(pwd)/drema:/local/drema \
     -B $(pwd)/submodules:/local/submodules \
     ./peract-latest.sif \
-    /usr/local/bin/opengl_setup.sh python /local/scripts/test_peract_env.py
+    python /local/scripts/test_peract_env.py
 
-# Run the PyRep test
-echo "2. Testing PyRep with CoppeliaSim..."
+# Run the PyRep test with combined headless configuration runner
+echo "2. Testing PyRep with CoppeliaSim in headless mode..."
 apptainer run --nv \
     --pwd /local/work \
     -B $(pwd)/data:/local/data \
@@ -49,6 +57,22 @@ apptainer run --nv \
     -B $(pwd)/drema:/local/drema \
     -B $(pwd)/submodules:/local/submodules \
     ./peract-latest.sif \
-    /usr/local/bin/opengl_setup.sh python /local/scripts/test_pyrep.py
+    /usr/local/bin/run_peract.sh python /local/scripts/test_pyrep.py
+
+# Test running a minimal PerAct command
+echo "3. Testing PerAct quickstart command..."
+apptainer run --nv \
+    --pwd /local/work \
+    -B $(pwd)/data:/local/data \
+    -B $(pwd)/cache:/local/cache \
+    -B $(pwd)/work:/local/work \
+    -B $(pwd)/src:/local/src \
+    -B $(pwd)/scripts:/local/scripts \
+    -B $(pwd)/configs:/local/configs \
+    -B $(pwd)/assets:/local/assets \
+    -B $(pwd)/drema:/local/drema \
+    -B $(pwd)/submodules:/local/submodules \
+    ./peract-latest.sif \
+    /usr/local/bin/run_peract.sh python -c "import os; print(f'Running in {os.getcwd()}'); from helpers import utils; print('PerAct helpers.utils imported successfully')"
 
 echo "PerAct environment tests completed!"

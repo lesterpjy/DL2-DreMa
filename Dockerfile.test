@@ -3,7 +3,7 @@ FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
 # Set noninteractive installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies with extra OpenGL packages
+# Install system dependencies with X11 and Qt support packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -34,13 +34,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libgtk2.0-0 \
     vim \
-    # Additional OpenGL/GLX packages for better container/host compatibility
+    # Additional OpenGL/GLX packages for better compatibility
     mesa-utils \
     mesa-common-dev \
     libegl1-mesa-dev \
     libgl1-mesa-dri \
     libglvnd-dev \
     libglx-mesa0 \
+    # Required for Qt/XCB in headless environment
+    libxcb1 \
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-randr0 \
+    libxcb-render-util0 \
+    libxcb-render0 \
+    libxcb-shape0 \
+    libxcb-shm0 \
+    libxcb-sync1 \
+    libxcb-util1 \
+    libxcb-xfixes0 \
+    libxcb-xinerama0 \
+    libxcb-xkb1 \
+    libx11-xcb1 \
+    libxkbcommon-x11-0 \
+    # For headless X11
+    xvfb \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -74,6 +93,9 @@ ENV COPPELIASIM_ROOT=/opt/coppeliaSim
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$COPPELIASIM_ROOT
 ENV QT_QPA_PLATFORM_PLUGIN_PATH=$COPPELIASIM_ROOT
 
+# Force Qt to use offscreen rendering mode (for headless operation)
+ENV QT_QPA_PLATFORM=offscreen
+
 # Make CoppeliaSim executable
 RUN chmod +x /opt/coppeliaSim/coppeliaSim.sh
 
@@ -91,8 +113,8 @@ RUN pip install -r requirements.txt && \
     VERBOSE=1 pip install -e . && \
     echo "PyRep installation complete."
 
-# Test PyRep installation with a script file
-RUN echo '#!/usr/bin/env python3\nimport sys\ntry:\n    import pyrep\n    print("PyRep import successful")\n    from pyrep.backend import sim\n    print("PyRep backend imported successfully")\nexcept ImportError as e:\n    print(f"Import error: {e}", file=sys.stderr)\n    print("Checking for shared libraries...", file=sys.stderr)\n    import subprocess\n    print(subprocess.check_output(["ldconfig", "-p"]).decode(), file=sys.stderr)\n    sys.exit(1)' > /root/test_pyrep.py && \
+# Test PyRep installation with a script file (with headless awareness)
+RUN echo '#!/usr/bin/env python3\nimport sys\nimport os\n# Force headless mode\nos.environ["QT_QPA_PLATFORM"] = "offscreen"\ntry:\n    import pyrep\n    print("PyRep import successful")\n    from pyrep.backend import sim\n    print("PyRep backend imported successfully")\nexcept ImportError as e:\n    print(f"Import error: {e}", file=sys.stderr)\n    print("Checking for shared libraries...", file=sys.stderr)\n    import subprocess\n    print(subprocess.check_output(["ldconfig", "-p"]).decode(), file=sys.stderr)\n    sys.exit(1)' > /root/test_pyrep.py && \
     python /root/test_pyrep.py
 
 # Clone and install RLBench (peract fork)
@@ -105,7 +127,7 @@ RUN pip install -r requirements.txt && \
     pip install -e .
 
 # Test RLBench installation
-RUN echo '#!/usr/bin/env python3\nimport rlbench\nprint("RLBench import successful")' > /root/test_rlbench.py && \
+RUN echo '#!/usr/bin/env python3\nimport os\n# Force headless mode\nos.environ["QT_QPA_PLATFORM"] = "offscreen"\nimport rlbench\nprint("RLBench import successful")' > /root/test_rlbench.py && \
     python /root/test_rlbench.py
 
 # Clone and install YARR (peract fork)
@@ -152,93 +174,46 @@ ENV PYTHONPATH="/root/install/peract:/root/install/RLBench:/root/install/YARR:/r
 RUN cd /root/install/peract && \
     python -c "from helpers import utils; print('Basic PerAct import successful!')"
 
-# Create OpenGL wrapper script to help with Singularity/Apptainer
-RUN echo '#!/bin/bash\n\
-    # OpenGL environment setup script for Singularity/Apptainer containers\n\
-    # This helps isolate container OpenGL from host OpenGL to avoid GLIBC version conflicts\n\
-    \n\
-    # Display current OpenGL libraries path\n\
-    echo "Current LD_LIBRARY_PATH: $LD_LIBRARY_PATH"\n\
-    \n\
-    # Check if running inside Singularity/Apptainer\n\
-    if [ -n "$SINGULARITY_CONTAINER" ] || [ -n "$APPTAINER_CONTAINER" ]; then\n\
-    echo "Running inside Singularity/Apptainer container"\n\
-    \n\
-    # Save original path\n\
-    export ORIGINAL_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"\n\
-    \n\
-    # Add container OpenGL paths to front of LD_LIBRARY_PATH to prioritize them\n\
-    if [ -d "/usr/lib/x86_64-linux-gnu/mesa" ]; then\n\
-    export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/mesa:$LD_LIBRARY_PATH"\n\
-    echo "Added container Mesa libraries to LD_LIBRARY_PATH"\n\
-    fi\n\
-    \n\
-    # Prevent certain host libraries from being used if they exist in container\n\
-    export __EGL_VENDOR_LIBRARY_DIRS="/usr/share/glvnd/egl_vendor.d"\n\
-    export __GLX_VENDOR_LIBRARY_NAME="mesa"\n\
-    \n\
-    # Try to isolate X11 display if it exists\n\
-    if [ -d "/tmp/.X11-unix" ]; then\n\
-    echo "Setting up X11 display isolation"\n\
-    export DISPLAY="${DISPLAY:-:0}"\n\
-    fi\n\
-    \n\
-    # Set vars to prefer container libraries\n\
-    export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib:$LD_LIBRARY_PATH"\n\
-    \n\
-    echo "Updated LD_LIBRARY_PATH: $LD_LIBRARY_PATH"\n\
-    else\n\
-    echo "Not running in Singularity/Apptainer container, no changes made"\n\
-    fi\n\
-    \n\
-    echo "OpenGL environment setup complete"\n\
-    \n\
-    # Execute the command passed to this script\n\
-    if [ $# -gt 0 ]; then\n\
-    echo "Executing: $@"\n\
-    exec "$@"\n\
-    fi' > /usr/local/bin/opengl_setup.sh && \
-    chmod +x /usr/local/bin/opengl_setup.sh
+COPY opengl_setup.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/opengl_setup.sh
 
-# Copy test scripts to verify installation
+COPY run_peract.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/run_peract.sh
+
+# For backward compatibility, create a symlink for opengl_setup.sh
+RUN ln -sf /usr/local/bin/run_peract.sh /usr/local/bin/opengl_setup.sh
+
+# Copy test scripts
 COPY test_peract_env.py /root/test_peract_env.py
 COPY test_pyrep.py /root/test_pyrep.py
 RUN chmod +x /root/test_peract_env.py /root/test_pyrep.py
 
-# Create comprehensive test script with OpenGL isolation
-RUN echo '#!/usr/bin/env python3\nimport sys\nprint("Python Path:", sys.path)\ntry:\n    # Only import non-OpenGL dependent modules for basic check\n    import numpy\n    print("✅ NumPy import successful")\n    import torch\n    print("✅ PyTorch import successful")\n    import yarr\n    print("✅ YARR import successful")\n    # Check PerAct module existence\n    import os\n    os.chdir("/root/install/peract")\n    # Try a minimal import that should work without OpenGL\n    from helpers import utils\n    print("✅ helpers.utils import successful")\n    print("\\nBasic imports successful! Full OpenGL-dependent imports may require runtime environment setup.")\nexcept ImportError as e:\n    print(f"❌ Import error: {e}")\n    sys.exit(1)' > /root/test_basic_imports.py && \
-    python /root/test_basic_imports.py
+# Create README for headless operation
+RUN echo '# PerAct Headless Operation\n\n\
+    ## Running on Compute Clusters\n\n\
+    This container is configured for headless operation, which is required when running on compute clusters without X11 display.\n\n\
+    ## Key Environment Variables\n\n\
+    The following environment variables are set for headless operation:\n\n\
+    ```\n\
+    QT_QPA_PLATFORM=offscreen    # Forces Qt to use offscreen rendering\n\
+    PYOPENGL_PLATFORM=egl        # Use EGL for OpenGL contexts\n\
+    LIBGL_ALWAYS_SOFTWARE=1      # Use software rendering\n\
+    ```\n\n\
+    ## Running PerAct\n\n\
+    Use the provided helper script to run PerAct commands:\n\n\
+    ```bash\n\
+    apptainer run --nv your-image.sif /usr/local/bin/run_peract.sh python eval.py [args...]\n\
+    ```\n\n\
+    ## Troubleshooting\n\n\
+    If you encounter OpenGL/Qt errors, make sure to:\n\n\
+    1. Always use headless=True in RLBench environments\n\
+    2. Always use the helper scripts provided\n\
+    3. Run with the --nv flag when GPU acceleration is needed\n\
+    ' > /local/README_HEADLESS.md
 
 # Copy all project files (if needed)
 WORKDIR /local
 COPY . /local/
-
-# Copy our updated test script
-COPY test_peract_env.py /local/scripts/test_peract_env.py
-
-# Create a README explaining the OpenGL issue
-RUN echo '# PerAct Environment Notes\n\n\
-    ## OpenGL/GLX Library Compatibility\n\n\
-    When running this container in Singularity/Apptainer with the `--nv` flag, you may encounter GLIBC version conflicts with OpenGL/GLX libraries.\n\
-    This happens because Singularity binds host GPU libraries which may require newer GLIBC versions than available in Ubuntu 20.04.\n\n\
-    ## Solutions\n\n\
-    ### 1. Use the OpenGL wrapper script\n\n\
-    ```bash\n\
-    singularity exec --nv your-image.sif /usr/local/bin/opengl_setup.sh your-command\n\
-    ```\n\n\
-    ### 2. Use the updated test script\n\n\
-    We provide a modified test script that checks package availability without requiring OpenGL initialization:\n\n\
-    ```bash\n\
-    singularity exec --nv your-image.sif python /local/scripts/test_peract_env.py\n\
-    ```\n\n\
-    ### 3. For SLURM jobs\n\n\
-    ```bash\n\
-    #!/bin/bash\n\
-    #SBATCH --partition=gpu\n\
-    #SBATCH --gres=gpu:1\n\
-    \n\
-    apptainer run --nv your-image.sif /usr/local/bin/opengl_setup.sh python your-script.py\n\
-    ```\n' > /local/README_OPENGL.md
 
 # Set up volumes for persistent storage
 VOLUME /local/work

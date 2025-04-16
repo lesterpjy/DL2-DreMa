@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test basic PyRep functionality with CoppeliaSim and verify it works with PerAct."""
+"""Test basic PyRep functionality with CoppeliaSim in headless mode for cluster environments."""
 
 import os
 import sys
@@ -13,8 +13,10 @@ def print_section(title):
     print("=" * 80 + "\n")
 
 
-# First test basic PyRep functionality
-print_section("Testing PyRep and CoppeliaSim")
+# Set environment variable to force headless mode for Qt
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+
+print_section("Testing PyRep and CoppeliaSim in Headless Mode")
 try:
     from pyrep import PyRep
 
@@ -30,7 +32,7 @@ try:
     print("Launching headless CoppeliaSim instance...")
     pr = PyRep()
     pr.launch(os.path.join(coppeliasim_path, "coppeliaSim.sh"), headless=True)
-    print("Successfully launched CoppeliaSim!")
+    print("Successfully launched CoppeliaSim in headless mode!")
 
     # Start the simulation
     print("Starting simulation...")
@@ -50,12 +52,15 @@ try:
     pr.shutdown()
     print("CoppeliaSim shut down successfully!")
 
-    print("\n✅ PyRep and CoppeliaSim connection test PASSED!")
+    print("\n✅ PyRep and CoppeliaSim headless test PASSED!")
 except Exception as e:
-    print(f"\n❌ PyRep and CoppeliaSim connection test FAILED: {e}")
+    print(f"\n❌ PyRep and CoppeliaSim headless test FAILED: {e}")
+    import traceback
 
-# Now test RLBench environment with PyRep
-print_section("Testing RLBench with PyRep")
+    traceback.print_exc()
+
+# Now test RLBench environment with PyRep in headless mode
+print_section("Testing RLBench with PyRep in Headless Mode")
 try:
     # Change to the PerAct root directory to ensure paths are correct
     peract_root = os.environ.get("PERACT_ROOT", "/root/install/peract")
@@ -72,10 +77,8 @@ try:
 
     print("✅ RLBench environment components imported successfully")
 
-    print(
-        "\nSetting up a simple RLBench environment (without actually launching it)..."
-    )
-    # Set up a simple environment configuration (but don't launch it)
+    # Create a simple headless environment configuration
+    print("\nSetting up and launching a simple RLBench headless environment...")
     obs_config = ObservationConfig()
     obs_config.set_all(False)
     obs_config.joint_positions = True
@@ -85,57 +88,48 @@ try:
     arm_action_mode = EndEffectorPoseViaPlanning()
     action_mode = MoveArmThenGripper(arm_action_mode, gripper_mode)
 
-    print("✅ Basic RLBench environment configuration successful")
+    # Create the environment
+    env = Environment(
+        action_mode=action_mode,
+        obs_config=obs_config,
+        headless=True,  # This is critical for cluster environments
+    )
 
-    print("\n✅ RLBench with PyRep setup test PASSED!")
+    # Launch the environment
+    print("Launching RLBench environment...")
+    env.launch()
+    print("✅ RLBench environment launched successfully in headless mode")
+
+    # Load a task
+    print("Loading ReachTarget task...")
+    task = env.get_task(ReachTarget)
+    print("✅ RLBench task loaded successfully")
+
+    # Reset the task
+    print("Resetting task...")
+    descriptions, obs = task.reset()
+    print("✅ RLBench task reset successful")
+
+    # Clean up
+    print("Shutting down environment...")
+    env.shutdown()
+    print("✅ RLBench environment shut down successfully")
+
+    print("\n✅ RLBench with PyRep headless test PASSED!")
 except Exception as e:
-    print(f"\n❌ RLBench with PyRep setup test FAILED: {e}")
+    print(f"\n❌ RLBench with PyRep headless test FAILED: {e}")
+    import traceback
 
-# Finally, check the PerAct-specific components with RLBench
-print_section("Testing PerAct components with RLBench")
-try:
-    # Make sure we're in the PerAct directory
-    os.chdir(peract_root)
-
-    # Import helpers from PerAct
-    print("Importing PerAct helpers...")
-    from helpers.custom_rlbench_env import CustomRLBenchEnv
-    from helpers import utils
-
-    # Import agent components
-    print("Importing PerAct agent components...")
-    from agents import peract_bc
-
-    print("✅ PerAct components imported successfully")
-
-    # Verify PYTHONPATH includes all necessary components
-    print("\nVerifying PYTHONPATH configuration...")
-    pythonpath = os.environ.get("PYTHONPATH", "")
-    required_paths = [
-        "/root/install/peract",
-        "/root/install/RLBench",
-        "/root/install/YARR",
-        "/root/install/PyRep",
-    ]
-
-    missing_paths = []
-    for path in required_paths:
-        if path not in pythonpath:
-            missing_paths.append(path)
-
-    if missing_paths:
-        print(f"❌ Missing paths in PYTHONPATH: {', '.join(missing_paths)}")
-    else:
-        print("✅ PYTHONPATH includes all required components")
-
-    print("\n✅ PerAct with RLBench integration test PASSED!")
-except Exception as e:
-    print(f"\n❌ PerAct with RLBench integration test FAILED: {e}")
+    traceback.print_exc()
 
 # Overall summary
 print_section("Overall Summary")
 print(
-    "This script tested the integration between PyRep, CoppeliaSim, RLBench, and PerAct."
+    "This script tested PyRep and RLBench in headless mode, which is required for cluster environments."
 )
-print("If all tests passed, your container should be ready to run the PerAct code.")
-print("You can now try running the quickstart example to fully verify functionality.")
+print(
+    "If all tests passed, your container is properly set up for running PerAct on a compute cluster."
+)
+print(
+    "Remember to always use headless=True when running on SLURM or other cluster environments."
+)
