@@ -1,0 +1,178 @@
+Bootstrap: docker
+From: nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu22.04
+
+%labels
+    Author ChatGPT
+    Version 1.1
+
+%files
+    # from your build context, include the tarball
+    CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz /root/install/
+
+%post
+    set -eux
+
+    ## —————— 0) Fix /tmp so APT can write its conf files ——————
+    chmod 1777 /tmp
+    mkdir -p /var/tmp && chmod 1777 /var/tmp
+    export TMPDIR=/var/tmp/
+
+    # —————— NVIDIA CLIENT LIBRARIES ——————
+    # Install the driver stubs & nvidia-smi so `--nv` can bind the host drivers in
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        nvidia-utils-515 \
+        libnvidia-compute-515 \
+        libnvidia-gl-515
+    rm -rf /var/lib/apt/lists/*
+
+    ## 1) Bootstrap APT & add deadsnakes PPA
+    apt-get update
+    apt-get install -y --no-install-recommends cuda-command-line-tools-11-7
+    DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common
+    add-apt-repository ppa:deadsnakes/ppa -y
+    apt-get update
+
+    echo ">>> INSIDE CONTAINER: before untarring, /root/install contains:"
+    ls -l /root/install || echo "(nothing or no /root/install yet)"
+
+    ## 0) Fix /tmp nodev and safe TMPDIR
+    chmod 1777 /tmp
+    mkdir -p /var/tmp/
+    chmod 1777 /var/tmp/
+    export TMPDIR=/var/tmp/
+
+    ## 1) System dependencies, GPG certs, X11/media libs
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        build-essential cmake git curl wget unzip ca-certificates gnupg \
+        python3.8 python3.8-dev python3.8-venv python3-pip \
+        libffi-dev pkg-config \
+        libglu1-mesa-dev libgl1-mesa-glx libglew-dev libosmesa6-dev \
+        libxrender1 libsm6 libxext6 libxi-dev libxinerama-dev libxcursor-dev \
+        libxcb1 libx11-xcb1 xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+    # switch the "python3" and "pip" symlinks to 3.8
+    ln -sf /usr/bin/python3.8 /usr/bin/python3
+    ln -sf /usr/bin/pip3 /usr/bin/pip
+
+    ## 2) Create Python venv so we don’t tangle system packages
+    python3 -m venv /opt/pyenv
+    . /opt/pyenv/bin/activate
+    # pip install "pip<24.1" setuptools # changed from pip install --upgrade setuptools
+    python3 -m pip install --upgrade "pip<24.1"
+
+    # (previous version) python3 -m pip install --upgrade pip setuptools
+
+    ## 3) Extract CoppeliaSim into /opt/coppeliaSim **before** PyRep
+    mkdir -p /opt/coppeliaSim
+    tar -xJf /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz \
+        -C /opt/coppeliaSim --strip-components=1
+    rm /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz
+    chmod +x /opt/coppeliaSim/coppeliaSim.sh
+
+    ## 4) Set CoppeliaSim env (needed at build time for PyRep)
+    export COPPELIASIM_ROOT=/opt/coppeliaSim
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$COPPELIASIM_ROOT
+    export QT_QPA_PLATFORM_PLUGIN_PATH=$COPPELIASIM_ROOT
+    export QT_QPA_PLATFORM=offscreen
+
+    ## 5) PyRep
+    git clone --depth 1 https://github.com/stepjam/PyRep.git /root/install/PyRep
+    cd /root/install/PyRep
+    pip install -r requirements.txt
+    VERBOSE=1 pip install -e .
+
+    ## 6) RLBench
+    cd /root/install
+    git clone --depth 1 https://github.com/leobarcellona/RLBench.git 
+    cd RLBench
+    pip install -r requirements.txt
+    pip install -e .
+
+    ## 7) YARR
+    cd /root/install
+    git clone --depth 1 https://github.com/leobarcellona/YARR.git 
+    cd YARR
+    pip install --no-deps -e .
+    pip install tensorboard moviepy natsort psutil timeout-decorator pyrender==0.1.45
+    pip install 'omegaconf<2.1,>=2.0.0' hydra-core==1.0.5 pandas==1.4.1 opencv-python
+
+    ## 8) PerAct
+    # make sure venv is active
+    . /opt/pyenv/bin/activate
+
+    cd /root/install
+    git clone --depth 1 https://github.com/peract/peract.git
+    cd peract
+
+    # 1) CLIP (not in PerAct requirements)
+    python -m pip install git+https://github.com/openai/CLIP.git
+
+    # 2) PerAct requirements
+    python -m pip install -r requirements.txt
+
+    # 3) Torch & torchvision
+    python -m pip install torch==1.13.1+cu117 \
+        torchvision==0.14.1+cu117 \
+        --extra-index-url https://download.pytorch.org/whl/cu117
+
+    # 4) PyTorch3D
+    python -m pip install pytorch3d==0.3.0
+
+    # 5) Editable install of PerAct itself
+    python -m pip install -e . --no-deps
+
+     
+    cd /root/install
+    git clone --depth 1 https://github.com/leobarcellona/drema_code.git
+    cd drema_code
+    pip install submodules/simple-knn
+    pip install submodules/diff-gaussian-rasterization
+    pip install submodules/diff-gaussian-rasterization-depth
+    pip install submodules/diff-surfel-rasterization
+    pip install -r requirements.txt
+
+    # sanity‐check submodule import (helpers.utils)
+    python - <<EOF
+from helpers import utils
+print("✅ Helpers.utils import OK")
+EOF
+
+    ## 9) Tests (optional but recommended)
+    python - <<EOF
+import os
+from pyrep import PyRep
+print("✔ PyRep import OK")
+from rlbench.environment import Environment
+import yarr
+print("✔ PyRep, RLBench, and YARR imports OK")
+
+
+# Test PerAct and its helpers using the venv’s python directly
+# /opt/pyenv/bin/python - <<EOF
+
+# import peract
+from helpers import utils
+# print("✅ PerAct import OK, version:", peract.__version__)
+print("✅ helpers.utils import OK")
+EOF
+
+%environment
+    # propagate headless/OpenGL hints at runtime
+    export COPPELIASIM_ROOT=/opt/coppeliaSim
+    export QT_QPA_PLATFORM=offscreen
+    export PYOPENGL_PLATFORM=egl
+    export LIBGL_ALWAYS_SOFTWARE=1
+    # python venv
+    source /opt/pyenv/bin/activate
+    export PATH=/opt/pyenv/bin:$PATH
+    # make sure per-install code is on PYTHONPATH
+    export PYTHONPATH=/root/install/peract:/root/install/RLBench:/root/install/YARR:/root/install/PyRep
+    # export PYTHONPATH=/root/install/peract:$PYTHONPATH
+
+
+%runscript
+    # default entrypoint: activate venv then exec user command
+    source /opt/pyenv/bin/activate
+    exec "$@"
