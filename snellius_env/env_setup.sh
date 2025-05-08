@@ -8,4 +8,4 @@ export LIBGL_ALWAYS_SOFTWARE=1
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
 # exec the given command
-exec "$@"
+# exec "$@"
