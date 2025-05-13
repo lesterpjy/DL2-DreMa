@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition=gpu_a100 # Or cpu_short
 #SBATCH --gpus=1             # If using GPU partition
-#SBATCH --output=work/rlbench_unit_test_override_ttt_%A.out
+#SBATCH --output=work/rlbench_unit_test_override_ttt_confirmation_%A.out
 #SBATCH --error=work/rlbench_unit_test_override_ttt_%A.err
 #SBATCH --time=00:20:00
 #SBATCH --ntasks=1
@@ -36,14 +36,6 @@ COMMAND_INSIDE_CONTAINER="
 
     echo '--- Checking existence of TTT file from shell AFTER setting ENV var (should be same) ---';
     ls -l \"\${RLBENCH_OVERRIDE_TTT_FILE_PATH}\" || echo 'WARNING: ls -l failed for \${RLBENCH_OVERRIDE_TTT_FILE_PATH}';
-
-    echo "--- Attempting to cat the TTT file (${CONTAINER_MOUNTED_GOOD_TTT_FILE}) to /dev/null ---"
-    cat "${CONTAINER_MOUNTED_GOOD_TTT_FILE}" > /dev/null
-    if [ $? -eq 0 ]; then
-        echo "SUCCESS: cat TTT file succeeded."
-    else
-        echo "ERROR: cat TTT file FAILED with exit code $?. THIS IS A PROBLEM."
-    fi
 
     cd /root/install/RLBench/tests/unit && \
     echo 'Current PWD inside container: ' \$(pwd) && \
