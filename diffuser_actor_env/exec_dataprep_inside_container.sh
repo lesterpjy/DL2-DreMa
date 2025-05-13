@@ -1,52 +1,46 @@
 #!/bin/bash
-# Runs inside diffuser_actor_jammy.sif
 
 set -e # Exit on error
 
 echo '--- Inside Container: exec_dataprep_inside_container.sh ---'
-echo "Current PWD: $(pwd)" # Should be /dream-team initially
+echo "Current PWD: $(pwd)"
 
-# 1) Environment is mostly set by the SIF's %environment block now
-#    (includes venv activation, COPPELIASIM_ROOT, QT vars, PYTHONPATH for PyRep/RLBench)
-echo "--- Environment Check ---"
-echo "PATH=$PATH"
-echo "PYTHONPATH=$PYTHONPATH"
-echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
-echo "QT_QPA_PLATFORM=${QT_QPA_PLATFORM}"
-echo "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_QPA_PLATFORM_PLUGIN_PATH}"
-python3 -c "import sys; print(f'Python executable: {sys.executable}')"
+# --- Environment Setup ---
+export COPPELIASIM_ROOT=/opt/coppeliaSim
+export LD_LIBRARY_PATH="${COPPELIASIM_ROOT}:${COPPELIASIM_ROOT}/platforms:${LD_LIBRARY_PATH}"
+export QT_QPA_PLATFORM_PLUGIN_PATH="${COPPELIASIM_ROOT}/platforms"
+export QT_QPA_PLATFORM="offscreen"
+export PYOPENGL_PLATFORM="egl"
+export LIBGL_ALWAYS_SOFTWARE="1"
 
-# Add bind-mounted diffuser actor code dir to PYTHONPATH if needed by preprocessing scripts
-export PYTHONPATH=/dream-team/3d_diffuser_actor:${PYTHONPATH}
+echo "Activating Python venv: /opt/diffuser_venv/bin/activate"
+source /opt/diffuser_venv/bin/activate
+export PYTHONIOENCODING=utf-8
+
+export PYTHONPATH=/dream-team/3d_diffuser_actor:/root/install/PyRep:/root/install/RLBench:${PYTHONPATH}
 echo "PYTHONPATH updated to: $PYTHONPATH"
 
-# Optional: Debug QT Plugins loading if needed
-# export QT_DEBUG_PLUGINS="1" 
+# --- Clear CoppeliaSim user settings ---
+echo "Clearing CoppeliaSim user settings..."
+rm -rf /home/scur2683/.config/CoppeliaSim || true
+rm -rf /home/scur2683/.CoppeliaSim      || true
+echo "User settings cleared."
 
-# 2) GPU Check (optional)
-echo '--- GPU check ---'
-# nvidia-smi || echo "nvidia-smi not found or failed"
-# python3 -c "import torch; print(f'Torch version: {torch.__version__}'); print(f'CUDA available for Torch: {torch.cuda.is_available()}')"
-
-# 3) Navigate to the 3D Diffuser Actor code directory
-cd /dream-team/3d_diffuser_actor
+cd /dream-team/3d_diffuser_actor # Scripts will be called from here
 echo "Changed PWD to: $(pwd)"
 
-# --- Configuration (from ENV VARS) ---
+# --- Configuration ---
 echo "--- Starting Data Processing for SPLIT: ${MY_SPLIT} ---"
-# ... (echo other config vars) ...
 
 DEMO_ROOT_FOR_RERENDER="${MY_RAW_RLBENCH_DATA_ROOT_ABS}/${MY_SPLIT}"
 RAW_HIGHRES_SAVE_PATH="${MY_OUTPUT_RAW_HIGHRES_ROOT_ABS}/${MY_SPLIT}"
 PACKAGED_SAVE_PATH="${MY_OUTPUT_PACKAGED_ROOT_ABS}/${MY_SPLIT}"
 
-# Output dirs created by Slurm script, no need to mkdir here
-
-PYTHON_EXEC_RERENDER="./data_preprocessing/rerender_highres_rlbench.py"
+PYTHON_EXEC_RERENDER="./data_preprocessing/rerender_highres_rlbench.py" # No debug prints here anymore
 PYTHON_EXEC_REARRANGE="./data_preprocessing/rearrange_rlbench_demos.py"
 PYTHON_EXEC_PACKAGE="./data_preprocessing/package_rlbench.py"
 
-# === Step 1: Re-render high-resolution camera views ===
+# === Step 1: Re-render ===
 echo "--- Step 1: Re-rendering (using xvfb-run) ---"
 for task_name in ${TASKS_TO_PROCESS}
 do
@@ -62,11 +56,10 @@ do
         --all_variations=True
 done
 
-# === Step 2: Re-arrange directory ===
+# === Step 2 & 3 (unchanged) ===
 echo "--- Step 2: Rearranging directories ---"
 xvfb-run -a python3 ${PYTHON_EXEC_REARRANGE} --root_dir "${RAW_HIGHRES_SAVE_PATH}"
 
-# === Step 3: Package episodes into .dat files ===
 echo "--- Step 3: Packaging episodes ---"
 for task_name in ${TASKS_TO_PROCESS}
 do

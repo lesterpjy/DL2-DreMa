@@ -103,13 +103,117 @@ From: nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu22.04
     echo "Upgrading pip inside venv..."
     python3 -m pip install --upgrade "pip<24.1" # Upgrade pip inside venv
 
+    # # --- Install CoppeliaSim ---
+    # # ... (Rest of the definition file remains the same) ...
+    # mkdir -p /opt/coppeliaSim
+    # tar -xJf /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz \
+    #     -C /opt/coppeliaSim --strip-components=1
+    # rm /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz
+    # chmod +x /opt/coppeliaSim/coppeliaSim.sh
+
     # --- Install CoppeliaSim ---
-    # ... (Rest of the definition file remains the same) ...
-    mkdir -p /opt/coppeliaSim
+    echo "--- Starting CoppeliaSim Installation ---"
+    # Ensure the target directory for CoppeliaSim exists and is writable by root (which %post runs as)
+    mkdir -p /opt/coppeliaSim 
+    if [ ! -d "/opt/coppeliaSim" ]; then
+        echo "CRITICAL ERROR: Failed to create /opt/coppeliaSim directory."
+        exit 1
+    fi
+    echo "Target directory /opt/coppeliaSim created or already exists."
+
+    # Ensure the source tarball exists (copied by %files)
+    if [ ! -f "/root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz" ]; then
+        echo "CRITICAL ERROR: CoppeliaSim tarball not found at /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz"
+        exit 1
+    fi
+    echo "CoppeliaSim tarball found at /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz"
+
+    echo "Extracting CoppeliaSim to /opt/coppeliaSim..."
     tar -xJf /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz \
         -C /opt/coppeliaSim --strip-components=1
+    
+    # Verify extraction - check for key files/directories immediately after tar
+    echo "Verifying key CoppeliaSim files post-extraction in /opt/coppeliaSim:"
+    ls -l /opt/coppeliaSim
+    if [ ! -f "/opt/coppeliaSim/coppeliaSim.sh" ] && [ ! -f "/opt/coppeliaSim/coppeliaSim" ]; then
+        echo "CRITICAL ERROR: Neither coppeliaSim.sh nor coppeliaSim executable found in /opt/coppeliaSim after extraction."
+        echo "Contents of /opt/coppeliaSim:"
+        find /opt/coppeliaSim -maxdepth 2 # List contents to debug
+        exit 1
+    fi
+    echo "Key CoppeliaSim files seem to be present."
+
+    # Remove the tarball now that it's extracted
     rm /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz
-    chmod +x /opt/coppeliaSim/coppeliaSim.sh
+    echo "Removed CoppeliaSim tarball."
+
+    # Set executable permissions
+    # Use find to make sure we get all relevant scripts/binaries if names vary slightly
+    find /opt/coppeliaSim -maxdepth 1 -type f -name "coppeliaSim*" -exec chmod +x {} \; -print
+    echo "Set execute permissions on coppeliaSim* files in /opt/coppeliaSim."
+
+
+    echo "--- CHECKING COPPELIASIM VERSION POST-INSTALL (inside /opt/coppeliaSim) ---"
+    cd /opt/coppeliaSim # IMPORTANT: Change directory to where CoppeliaSim is installed
+
+    COPPELIA_VERSION_STRING="Unknown"
+
+    # Attempt 1: Check common readme/version files
+    echo "Looking for version in readme/version files (within /opt/coppeliaSim):"
+    # Use find to locate potential files and cat them. Adjust names if needed.
+    VERSION_FROM_FILE=$(find . -maxdepth 1 -type f \( -iname "readme.txt" -o -iname "version.txt" -o -iname "release_notes.txt" \) -print -exec cat {} \; | grep -i "CoppeliaSim V" | head -n 1)
+    if [ -n "$VERSION_FROM_FILE" ]; then
+        COPPELIA_VERSION_STRING="$VERSION_FROM_FILE"
+        echo "Found version in file: $COPPELIA_VERSION_STRING"
+    else
+        echo "No version string found in common text files."
+    fi
+
+    # Attempt 2: Try running the executable with -h or --help
+    # The coppeliaSim.sh script often handles environment setup.
+    if [ "$COPPELIA_VERSION_STRING" == "Unknown" ] && [ -f "./coppeliaSim.sh" ]; then
+        echo "Attempting to get version from ./coppeliaSim.sh -h:"
+        # Run in a subshell and capture output, ignore errors if it tries to launch GUI
+        # Need to ensure Xvfb is available if it tries to connect to X server even for -h
+        # For build time, it's safer to assume no X server.
+        # If it needs LD_LIBRARY_PATH, it should set it itself or be runnable from its dir.
+        VERSION_FROM_SH_HELP=$( (./coppeliaSim.sh -h || ./coppeliaSim.sh --version || ./coppeliaSim.sh -v) 2>&1 | grep -i "CoppeliaSim V" | head -n 1 )
+        if [ -n "$VERSION_FROM_SH_HELP" ]; then
+            COPPELIA_VERSION_STRING="$VERSION_FROM_SH_HELP"
+            echo "Found version from .sh -h/--version/-v: $COPPELIA_VERSION_STRING"
+        else
+            echo "./coppeliaSim.sh -h/--version/-v did not yield version string."
+        fi
+    fi
+    
+    # Attempt 3: If the main executable is 'coppeliaSim'
+    if [ "$COPPELIA_VERSION_STRING" == "Unknown" ] && [ -f "./coppeliaSim" ] && [ -x "./coppeliaSim" ]; then
+        echo "Attempting to get version from ./coppeliaSim executable (-h/--version/-v):"
+        VERSION_FROM_BIN_HELP=$( (timeout 5s ./coppeliaSim -h || timeout 5s ./coppeliaSim --version || timeout 5s ./coppeliaSim -v) 2>&1 | grep -i "CoppeliaSim V" | head -n 1)
+        if [ -n "$VERSION_FROM_BIN_HELP" ]; then
+            COPPELIA_VERSION_STRING="$VERSION_FROM_BIN_HELP"
+            echo "Found version from ./coppeliaSim -h/--version/-v: $COPPELIA_VERSION_STRING"
+        else
+            echo "./coppeliaSim -h/--version/-v did not yield version string."
+        fi
+    fi
+    
+    # Attempt 4: As a final fallback for this build-time check, echo the full output of -h if nothing found yet
+    if [ "$COPPELIA_VERSION_STRING" == "Unknown" ] && [ -f "./coppeliaSim.sh" ]; then
+        echo "FALLBACK: Displaying full output of ./coppeliaSim.sh -h (first 20 lines)"
+        (./coppeliaSim.sh -h || ./coppeliaSim.sh --version || ./coppeliaSim.sh -v) 2>&1 | head -n 20
+    elif [ "$COPPELIA_VERSION_STRING" == "Unknown" ] && [ -f "./coppeliaSim" ] && [ -x "./coppeliaSim" ]; then
+        echo "FALLBACK: Displaying full output of ./coppeliaSim -h (first 20 lines)"
+        (timeout 5s ./coppeliaSim -h || timeout 5s ./coppeliaSim --version || timeout 5s ./coppeliaSim -v) 2>&1 | head -n 20
+    fi
+
+    echo "--- IDENTIFIED COPPELIASIM VERSION (during build): $COPPELIA_VERSION_STRING ---"
+    if [ "$COPPELIA_VERSION_STRING" == "Unknown" ]; then
+        echo "WARNING: Failed to reliably determine CoppeliaSim version during build."
+    fi
+    
+    cd / # Return to root directory or any other appropriate directory
+    echo "--- Finished CoppeliaSim Installation and Version Check ---"
 
     # --- Set CoppeliaSim Env Vars (Needed for PyRep Build) ---
     export COPPELIASIM_ROOT=/opt/coppeliaSim
@@ -117,20 +221,49 @@ From: nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu22.04
     export QT_QPA_PLATFORM_PLUGIN_PATH=${COPPELIASIM_ROOT}
     export QT_QPA_PLATFORM=offscreen
 
+    # # --- Install PyRep ---
+    # git clone --depth 1 https://github.com/stepjam/PyRep.git /root/install/PyRep
+    # cd /root/install/PyRep
+
+    # # --- BEGIN SIMPLER DEBUG PATCH FOR PYREP ---
+    # echo "Patching PyRep's sim.py for basic debug output..."
+    # # Target file: /root/install/PyRep/pyrep/backend/sim.py
+    # # Add a print statement just before the error is raised.
+    # sed -i "/raise RuntimeError('Handle %s does not exist.' % objectName)/i \        print(f'PYREP_DEBUG: sim.py - simGetObjectHandle is about to fail for objectName: {objectName}')" \
+    # ./pyrep/backend/sim.py
+    # echo "PyRep's sim.py patched with basic debug."
+    # # --- END SIMPLER DEBUG PATCH FOR PYREP ---
+
+    # pip install -r requirements.txt
+    # VERBOSE=1 pip install -e .
+
+      
     # --- Install PyRep ---
-    git clone --depth 1 https://github.com/stepjam/PyRep.git /root/install/PyRep
+    echo "Installing PyRep from your fork..."
+    # git clone --depth 1 https://github.com/stepjam/PyRep.git /root/install/PyRep
+    git clone --depth 1 https://github.com/lesterpjy/PyRep.git /root/install/PyRep # YOUR PYREP FORK
     cd /root/install/PyRep
     pip install -r requirements.txt
     VERBOSE=1 pip install -e .
+    echo "PyRep installation from fork complete."
+
 
     # --- Install RLBench (MohitShridhar/RLBench@peract fork) ---
-    cd /root/install
-    git clone --depth 1 -b peract https://github.com/MohitShridhar/RLBench.git /root/install/RLBench
+    echo "Installing RLBench from MohitShridhar/RLBench (peract branch)..."
+    cd /root/install 
+    git clone --depth 1 -b peract https://github.com/lesterpjy/RLBench.git /root/install/RLBench
     cd /root/install/RLBench
-    sed -i "s/if self._succ_grasped is False:/if self._succ_grasped is None:/g" ./rlbench/tasks/close_jar.py 
-    echo "Applied close_jar fix to RLBench."
+    # Apply close_jar fix if needed for this specific fork/branch
+    if grep -q "if self._succ_grasped is False:" ./rlbench/tasks/close_jar.py; then
+       echo "Applying close_jar fix to RLBench fork..."
+       sed -i "s/if self._succ_grasped is False:/if self._succ_grasped is None:/g" ./rlbench/tasks/close_jar.py
+    else
+       echo "close_jar fix seems to be already applied or not needed in this version of RLBench."
+    fi
     pip install -r requirements.txt
     pip install -e .
+    echo "RLBench installation from fork complete."
+
 
     # --- Install 3D Diffuser Actor Python Dependencies ---
     cd /root/install 

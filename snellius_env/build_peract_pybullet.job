@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH -p cbuild
+#SBATCH -t 02:00:00
+#SBATCH --job-name=build_peract_pybullet
+#SBATCH --output=work/build_peract_pybullet_%A.out
+
+module purge
+module load 2023
+
+# set up a big-enough tmpdir under /tmp
+export APPTAINER_TMPDIR=$(mktemp -d /tmp/scur2683XXXXXX)
+export SINGULARITY_TMPDIR=$APPTAINER_TMPDIR
+
+# drop any old image
+rm -f peract_pybullet.sif
+
+echo "*** HOST: current working directory ***"
+pwd
+echo "*** HOST: listing build-context (/home/scur2683/dream-team) ***"
+ls -l /home/scur2683/dream-team
+
+
+echo "*** HOST(after cd): pwd & listing ***"
+pwd
+ls -l
+
+echo "=== Now invoking apptainer build ==="
+apptainer build --fakeroot --tmpdir $SINGULARITY_TMPDIR peract_pybullet.sif peract_pybullet.def
+
+echo "✅ peract_pybullet.sif ready (Ubuntu 22.04 + PerAct + Pybullet 3.2.7)"
