@@ -1,0 +1,175 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --output=work/diffuser_train_peract_%A.out
+#SBATCH --error=work/diffuser_train_peract_%A.err
+#SBATCH --time=00:10:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+
+module purge
+module load 2023
+
+echo "=== Slurm Job: Starting 3D Diffuser Actor Training (PerAct Setup) ==="
+PROJECT_ROOT_ON_HOST=$(pwd) # /gpfs/home4/scur2683/dream-team
+CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif"
+
+# --- Path to the pre-packaged PerAct data on the host ---
+HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_packaged" # Contains train/ and val/
+
+# --- Path where this data will be accessible inside the container ---
+# The training script expects paths like 'data/peract/Peract_packaged/train'
+# So we need to mount HOST_PERACT_PACKAGED_DATA_ROOT to a location such that
+# '/dream-team/3d_diffuser_actor/data/peract/Peract_packaged' points to it.
+# This means we need a '/dream-team/3d_diffuser_actor/data/peract' directory structure
+# inside the container, and then mount HOST_PERACT_PACKAGED_DATA_ROOT to
+# '/dream-team/3d_diffuser_actor/data/peract/Peract_packaged' if it's not already part of project root.
+
+# Best approach: Ensure the training script's relative paths for data
+# resolve correctly given the bind mounts.
+# The script `train_keypose_peract.sh` uses:
+# dataset=data/peract/Peract_packaged/train
+# valset=data/peract/Peract_packaged/val
+# These paths are relative to where `main_trajectory.py` is run from,
+# which will be /dream-team/3d_diffuser_actor/ inside the container.
+# So, we need to make sure that inside the container:
+# /dream-team/3d_diffuser_actor/data/peract/Peract_packaged/train points to HOST_PERACT_PACKAGED_DATA_ROOT/train
+
+# We will bind mount the entire HOST_PERACT_PACKAGED_DATA_ROOT.
+# The script then needs to be adjusted or the target path carefully chosen.
+# Easiest: Adjust dataset/valset paths in the command.
+CONTAINER_DATA_BASE_PATH="/data_in_container" # An arbitrary base path in container for clarity
+CONTAINER_PERACT_PACKAGED_PATH="${CONTAINER_DATA_BASE_PATH}/Peract_packaged"
+
+# --- Optional: Path to your known-good task_design.ttt on the host (if needed by training/eval) ---
+# Training typically doesn't require launching the simulator in the same way data gen does.
+# However, if any part of main_trajectory.py or its dependencies tries to init RLBench/PyRep
+# (e.g., for validation against sim, or loading task definitions that require sim), this might be needed.
+# For now, let's assume it's NOT needed for training with pre-packaged data, to keep it simple.
+# If errors indicate missing sim objects, we can add this back.
+# HOST_GOOD_TTT_FILE="/scratch-shared/tmp.lUdVGE8VOd/good_rlbench_assets/task_design.ttt"
+# CONTAINER_MOUNTED_GOOD_TTT_FILE="/good_assets_host/task_design.ttt" # Matches bind mount below
+# TTT_BIND_MOUNT_ARG=""
+# if [ -f "${HOST_GOOD_TTT_FILE}" ]; then
+#     echo "INFO: Found known-good TTT file at ${HOST_GOOD_TTT_FILE} on the HOST"
+#     TTT_BIND_MOUNT_ARG="--bind ${HOST_GOOD_TTT_FILE}:${CONTAINER_MOUNTED_GOOD_TTT_FILE}:ro"
+# else
+#     echo "WARNING: Known-good TTT file not found at ${HOST_GOOD_TTT_FILE}. If training needs sim, this could be an issue."
+# fi
+
+echo "Host Project Root: ${PROJECT_ROOT_ON_HOST}"
+echo "Container Image: ${CONTAINER_IMAGE_PATH}"
+echo "Host PerAct Packaged Data: ${HOST_PERACT_PACKAGED_DATA_ROOT}"
+echo "Container PerAct Packaged Data will be at: ${CONTAINER_PERACT_PACKAGED_PATH}"
+
+# --- Training script command (adapted from train_keypose_peract.sh) ---
+# Key changes:
+# - Adjusted dataset/valset paths to use CONTAINER_PERACT_PACKAGED_PATH
+# - Added xvfb-run -a IF training involves any RLBench/PyRep/CoppeliaSim instantiation.
+#   For training on pre-packaged .dat files, this is *usually* not needed unless
+#   the main_trajectory.py script itself tries to launch simulation for some reason
+#   (e.g., online eval, visualization callback).
+#   Start WITHOUT xvfb-run. If GLIB/Qt errors appear, add it.
+# - We are running this directly, not via another .sh script inside the container for now.
+
+# Define parameters from train_keypose_peract.sh
+main_dir_in_container="/dream-team/3d_diffuser_actor/Actor_18Peract_100Demo_multitask_output" # Output inside container
+dataset_in_container="${CONTAINER_PERACT_PACKAGED_PATH}/train"
+valset_in_container="${CONTAINER_PERACT_PACKAGED_PATH}/val"
+instructions_in_container="instructions/peract/instructions.pkl" # Relative to /dream-team/3d_diffuser_actor
+gripper_loc_bounds_in_container="tasks/18_peract_tasks_location_bounds.json" # Relative
+
+lr="1e-4"
+dense_interpolation="1"
+interpolation_length="2"
+num_history="3"
+diffusion_timesteps="100"
+B="8" # Batch size
+C="120" # Embedding dim
+# ngpus="1" # torchrun will use the 1 GPU made visible by Slurm with --gpus=1.
+           # If you request more in Slurm (--gpus=N), torchrun can use N.
+           # The script had ngpus=6, but that's for nproc_per_node.
+           # For a single GPU job, nproc_per_node should be 1.
+ngpus_torchrun="1" # For a single GPU job as requested by Slurm.
+quaternion_format="xyzw"
+
+
+COMMAND_INSIDE_CONTAINER="
+    set -e # Exit on error within this script block
+    echo '--- Inside Container for Training ---'
+
+    # Optional: Activate venv if not done by SIF's %environment or %runscript
+    # The SIF's %environment SHOULD handle this.
+    # echo 'Activating Python venv: /opt/diffuser_venv/bin/activate'
+    # source /opt/diffuser_venv/bin/activate
+
+    echo 'Current user: $(whoami)'
+    echo 'PYTHONPATH: ${PYTHONPATH}'
+    echo 'LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}'
+    echo 'COPPELIASIM_ROOT: ${COPPELIASIM_ROOT}'
+    echo 'QT_QPA_PLATFORM: ${QT_QPA_PLATFORM}'
+    echo 'PYOPENGL_PLATFORM: ${PYOPENGL_PLATFORM}'
+
+    # Optional: Override TTT file path if needed by the training script
+    # if [ -n \"\${HOST_GOOD_TTT_FILE}\" ]; then # Check if host path was valid
+    #    export RLBENCH_OVERRIDE_TTT_FILE_PATH='${CONTAINER_MOUNTED_GOOD_TTT_FILE}'
+    #    echo \"RLBENCH_OVERRIDE_TTT_FILE_PATH set to: \${RLBENCH_OVERRIDE_TTT_FILE_PATH}\"
+    #    ls -l \"\${RLBENCH_OVERRIDE_TTT_FILE_PATH}\"
+    # fi
+
+    cd /dream-team/3d_diffuser_actor # IMPORTANT: Run from the project's root directory for relative paths
+
+    echo \"Creating output directory: ${main_dir_in_container}\"
+    mkdir -p \"${main_dir_in_container}\"
+
+    echo 'Starting training script...'
+    export CUDA_LAUNCH_BLOCKING=1 # From original script, good for debugging CUDA errors
+    
+    # If main_trajectory.py *does* end up needing simulator, wrap with xvfb-run:
+    xvfb-run -a torchrun --nproc_per_node ${ngpus_torchrun} --master_port \$((\$RANDOM % 10000 + 20000)) \\
+        main_trajectory.py \\
+        --tasks place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap \\
+        --dataset \"${dataset_in_container}\" \\
+        --valset \"${valset_in_container}\" \\
+        --instructions \"${instructions_in_container}\" \\
+        --gripper_loc_bounds \"${gripper_loc_bounds_in_container}\" \\
+        --num_workers 1 \\
+        --train_iters 5 \\ # Reduced for a quick test, original was 600000
+        --embedding_dim ${C} \\
+        --use_instruction 1 \\
+        --rotation_parametrization 6D \\
+        --diffusion_timesteps ${diffusion_timesteps} \\
+        --val_freq 1 \\ # Reduced for a quick test, original was 4000
+        --dense_interpolation ${dense_interpolation} \\
+        --interpolation_length ${interpolation_length} \\
+        --exp_log_dir \"${main_dir_in_container}\" \\
+        --batch_size ${B} \\
+        --batch_size_val 2 \\ # Reduced for a quick test, original was 14
+        --cache_size 100 \\ # Reduced for a quick test, original was 600
+        --cache_size_val 0 \\
+        --keypose_only 1 \\
+        --variations {0..1} \\ # Reduced for a quick test, original was {0..199}
+        --lr ${lr} \\
+        --num_history ${num_history} \\
+        --cameras left_shoulder right_shoulder wrist front \\
+        --max_episodes_per_task 10 \\ # Reduced for a quick test, original was -1
+        --quaternion_format ${quaternion_format} \\
+        --run_log_dir diffusion_multitask-C${C}-B${B}-lr${lr}-DI${dense_interpolation}-${interpolation_length}-H${num_history}-DT${diffusion_timesteps}_QUICKTEST
+
+    echo 'Training script finished.'
+"
+
+# Ensure the host directory for output exists and is writable
+# This is where main_dir_in_container will effectively write if it's part of /dream-team
+mkdir -p "${PROJECT_ROOT_ON_HOST}/3d_diffuser_actor/Actor_18Peract_100Demo_multitask_output"
+
+apptainer exec --nv \
+  --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
+  --bind "${HOST_PERACT_PACKAGED_DATA_ROOT}":"${CONTAINER_PERACT_PACKAGED_PATH}":ro \
+  # ${TTT_BIND_MOUNT_ARG} # Add if TTT override is re-enabled
+  "${CONTAINER_IMAGE_PATH}" \
+  bash -c "${COMMAND_INSIDE_CONTAINER}"
+
+EXIT_CODE=$?
+echo "=== Slurm Job: 3D Diffuser Actor Training Finished with exit code $EXIT_CODE ==="
+exit $EXIT_CODE
