@@ -6,15 +6,19 @@ echo '--- Inside Container: exec_dataprep_inside_container.sh ---'
 echo "Current PWD: $(pwd)"
 
 # --- Environment Setup ---
-# export COPPELIASIM_ROOT=/opt/coppeliaSim
+export XDG_RUNTIME_DIR="/tmp/xdg_runtime_$(whoami)_$$" 
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 0700 "$XDG_RUNTIME_DIR"
+
+export COPPELIASIM_ROOT=/opt/coppeliaSim
 echo "COPPELIASIM_ROOT: ${COPPELIASIM_ROOT}"
-# export LD_LIBRARY_PATH="${COPPELIASIM_ROOT}:${COPPELIASIM_ROOT}/platforms:${LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="${COPPELIASIM_ROOT}:${COPPELIASIM_ROOT}/platforms:${LD_LIBRARY_PATH}"
 echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}"
-# export QT_QPA_PLATFORM_PLUGIN_PATH="${COPPELIASIM_ROOT}/platforms"
+export QT_QPA_PLATFORM_PLUGIN_PATH="${COPPELIASIM_ROOT}/platforms"
 echo "QT_QPA_PLATFORM_PLUGIN_PATH: ${QT_QPA_PLATFORM_PLUGIN_PATH}"
-# export QT_QPA_PLATFORM="offscreen"
+export QT_QPA_PLATFORM="offscreen"
 echo "QT_QPA_PLATFORM: ${QT_QPA_PLATFORM}"
-# export PYOPENGL_PLATFORM="egl"
+export PYOPENGL_PLATFORM="egl"
 echo "PYOPENGL_PLATFORM: ${PYOPENGL_PLATFORM}"
 # export LIBGL_ALWAYS_SOFTWARE="1"
 
@@ -50,6 +54,7 @@ echo "--- Step 1: Re-rendering (using xvfb-run) ---"
 for task_name in ${TASKS_TO_PROCESS}
 do
     echo "Re-rendering task: $task_name for split: ${MY_SPLIT}"
+    export QT_OPENGL=desktop
     xvfb-run -a \
     python3 ${PYTHON_EXEC_RERENDER} \
         --tasks="$task_name" \

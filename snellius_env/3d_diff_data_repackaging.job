@@ -3,7 +3,7 @@
 #SBATCH --gpus=1
 #SBATCH --output=work/diffuser_dataprep_new_sif_%A.out
 #SBATCH --error=work/diffuser_dataprep_new_sif_%A.err
-#SBATCH --time=01:00:00 # Consider increasing if processing many tasks/variations
+#SBATCH --time=00:05:00 # Consider increasing if processing many tasks/variations
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 
