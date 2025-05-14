@@ -5,7 +5,6 @@
 #SBATCH --error=work/diffuser_train_peract_%A.err
 #SBATCH --time=00:10:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
 
 module purge
 module load 2023
@@ -58,6 +57,10 @@ CONTAINER_PERACT_PACKAGED_PATH="${CONTAINER_DATA_BASE_PATH}/Peract_packaged"
 # fi
 
 echo "Host Project Root: ${PROJECT_ROOT_ON_HOST}"
+echo "Contents of PROJECT_ROOT_ON_HOST (${PROJECT_ROOT_ON_HOST}):"
+ls -ld "${PROJECT_ROOT_ON_HOST}"
+ls -l "${PROJECT_ROOT_ON_HOST}"
+
 echo "Container Image: ${CONTAINER_IMAGE_PATH}"
 echo "Host PerAct Packaged Data: ${HOST_PERACT_PACKAGED_DATA_ROOT}"
 echo "Container PerAct Packaged Data will be at: ${CONTAINER_PERACT_PACKAGED_PATH}"
@@ -128,7 +131,7 @@ COMMAND_INSIDE_CONTAINER="
     # If main_trajectory.py *does* end up needing simulator, wrap with xvfb-run:
     xvfb-run -a torchrun --nproc_per_node ${ngpus_torchrun} --master_port \$((\$RANDOM % 10000 + 20000)) \\
         main_trajectory.py \\
-        --tasks place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap \\
+        --tasks slide_block_to_color_target \\
         --dataset \"${dataset_in_container}\" \\
         --valset \"${valset_in_container}\" \\
         --instructions \"${instructions_in_container}\" \\
@@ -159,14 +162,81 @@ COMMAND_INSIDE_CONTAINER="
     echo 'Training script finished.'
 "
 
+COMMAND_INSIDE_CONTAINER="
+    set -e # Exit on error within this script block
+    echo '--- Inside Apptainer Container for Training (COMMAND_INSIDE_CONTAINER) ---'
+    
+    # The %runscript of the SIF should have already activated the venv.
+    # Verify:
+    echo \"Current user: \$(whoami)\"
+    echo \"which python: \$(which python)\" # Should point to venv python
+    echo \"PYTHONPATH (after SIF runscript): \${PYTHONPATH}\"
+    echo \"LD_LIBRARY_PATH (after SIF runscript): \${LD_LIBRARY_PATH}\"
+    echo \"COPPELIASIM_ROOT (after SIF runscript): \${COPPELIASIM_ROOT}\"
+
+    # Set TTT override if HOST_GOOD_TTT_FILE was defined and valid
+    # Note: RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_DATAPREP was used before, ensure consistency or simplify
+    if [ -n \"\${RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_DATAPREP}\" ]; then
+       export RLBENCH_OVERRIDE_TTT_FILE_PATH=\"\${RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_DATAPREP}\"
+       echo \"RLBENCH_OVERRIDE_TTT_FILE_PATH set to: \${RLBENCH_OVERRIDE_TTT_FILE_PATH}\"
+       ls -l \"\${RLBENCH_OVERRIDE_TTT_FILE_PATH}\"
+    fi
+
+    # Check if /dream-team is mounted
+    echo \"Listing /dream-team:\"
+    ls -l /dream-team
+
+    cd /dream-team/3d_diffuser_actor # This MUST work if bind mount is successful
+    echo \"Current PWD: \$(pwd)\"
+
+    echo \"Creating output directory: ${main_dir_in_container}\" # main_dir_in_container needs to be defined
+    mkdir -p \"${main_dir_in_container}\"
+
+    echo 'Starting training script...'
+    export CUDA_LAUNCH_BLOCKING=1 
+    
+    # xvfb-run -a # Only if needed
+    torchrun --nproc_per_node ${ngpus_torchrun} --master_port \$((\$RANDOM % 10000 + 20000)) \\
+        main_trajectory.py \\
+        --tasks slide_block_to_color_target \\
+        --dataset \"${dataset_in_container}\" \\
+        --valset \"${valset_in_container}\" \\
+        --instructions \"${instructions_in_container}\" \\
+        --gripper_loc_bounds \"${gripper_loc_bounds_in_container}\" \\
+        --num_workers 1 \\
+        --train_iters 5 \\
+        --embedding_dim ${C} \\
+        --use_instruction 1 \\
+        --rotation_parametrization 6D \\
+        --diffusion_timesteps ${diffusion_timesteps} \\
+        --val_freq 1 \\
+        --dense_interpolation ${dense_interpolation} \\
+        --interpolation_length ${interpolation_length} \\
+        --exp_log_dir \"${main_dir_in_container}\" \\
+        --batch_size ${B} \\
+        --batch_size_val 2 \\
+        --cache_size 100 \\
+        --cache_size_val 0 \\
+        --keypose_only 1 \\
+        --variations {0..1} \\
+        --lr ${lr} \\
+        --num_history ${num_history} \\
+        --cameras left_shoulder right_shoulder wrist front \\
+        --max_episodes_per_task 10 \\
+        --quaternion_format ${quaternion_format} \\
+        --run_log_dir diffusion_multitask-C${C}-B${B}-lr${lr}-DI${dense_interpolation}-${interpolation_length}-H${num_history}-DT${diffusion_timesteps}_QUICKTEST
+
+    echo 'Training script finished.'
+"
+
 # Ensure the host directory for output exists and is writable
 # This is where main_dir_in_container will effectively write if it's part of /dream-team
 mkdir -p "${PROJECT_ROOT_ON_HOST}/3d_diffuser_actor/Actor_18Peract_100Demo_multitask_output"
 
-apptainer exec --nv \
-  --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
+singularity exec --nv \
+  --bind "/home/scur2683/dream-team":/dream-team \
   --bind "${HOST_PERACT_PACKAGED_DATA_ROOT}":"${CONTAINER_PERACT_PACKAGED_PATH}":ro \
-  # ${TTT_BIND_MOUNT_ARG} # Add if TTT override is re-enabled
+  "${TTT_BIND_MOUNT_ARG}" \
   "${CONTAINER_IMAGE_PATH}" \
   bash -c "${COMMAND_INSIDE_CONTAINER}"
 
