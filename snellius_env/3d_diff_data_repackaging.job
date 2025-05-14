@@ -1,0 +1,97 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --output=work/diffuser_dataprep_new_sif_%A.out
+#SBATCH --error=work/diffuser_dataprep_new_sif_%A.err
+#SBATCH --time=01:00:00 # Consider increasing if processing many tasks/variations
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8 # Good for data processing
+
+module purge
+module load 2023
+
+echo "=== Slurm Job: Starting 3D Diffuser Actor Data Preparation (using NEW SIF) ==="
+PROJECT_ROOT_ON_HOST=$(pwd)
+# --- USE THE NEW CONTAINER ---
+CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif" 
+ENTRYPOINT_SCRIPT_IN_CONTAINER="/dream-team/diffuser_actor_env/exec_dataprep_inside_container.sh" # This is your main data prep script
+
+# --- Configuration passed as Environment Variables to the container/entrypoint script ---
+# These are for your exec_dataprep_inside_container.sh script
+export MY_RAW_RLBENCH_DATA_ROOT_ABS="/scratch-shared/tmp.lUdVGE8VOd/rlbench"
+export MY_OUTPUT_RAW_HIGHRES_ROOT_ABS="/scratch-shared/tmp.lUdVGE8VOd/Peract_raw_highres_tasks"
+export MY_OUTPUT_PACKAGED_ROOT_ABS="/scratch-shared/tmp.lUdVGE8VOd/Peract_packaged_tasks"
+export TASKS_TO_PROCESS="place_shape_in_shape_sorter"
+
+echo "Host Project Root: ${PROJECT_ROOT_ON_HOST}"
+echo "Container Image: ${CONTAINER_IMAGE_PATH}"
+echo "Entrypoint script in container: ${ENTRYPOINT_SCRIPT_IN_CONTAINER}"
+echo "Raw RLBench Data Root (for container): ${MY_RAW_RLBENCH_DATA_ROOT_ABS}"
+echo "Output Raw Highres Root (for container): ${MY_OUTPUT_RAW_HIGHRES_ROOT_ABS}"
+echo "Output Packaged Root (for container): ${MY_OUTPUT_PACKAGED_ROOT_ABS}"
+echo "Tasks to process: ${TASKS_TO_PROCESS}"
+
+# --- Ensure host directories exist for bind mounting and output ---
+# These paths are on the HOST, /scratch-shared will be mapped into the container
+mkdir -p "${MY_OUTPUT_RAW_HIGHRES_ROOT_ABS}/train" "${MY_OUTPUT_RAW_HIGHRES_ROOT_ABS}/val"
+mkdir -p "${MY_OUTPUT_PACKAGED_ROOT_ABS}/train" "${MY_OUTPUT_PACKAGED_ROOT_ABS}/val"
+echo "Host output directories created."
+
+# Make sure your entrypoint script on the host (that gets bind-mounted) is executable
+chmod +x "${PROJECT_ROOT_ON_HOST}/diffuser_actor_env/exec_dataprep_inside_container.sh"
+echo "Made entrypoint script ${PROJECT_ROOT_ON_HOST}/diffuser_actor_env/exec_dataprep_inside_container.sh executable on host."
+
+# --- use specific global TTT file ---
+# --- Path to your known-good task_design.ttt on the host ---
+HOST_GLOBAL_TTT_FILE="/scratch-shared/tmp.lUdVGE8VOd/good_rlbench_assets/task_design.ttt"
+# --- Path where this will be mounted inside the container ---
+CONTAINER_MOUNTED_GLOBAL_TTT_FILE="/good_assets_host/task_design.ttt"
+# Additional bind mount for global TTT:
+ADDITIONAL_BINDS=""
+if [ -f "${HOST_GLOBAL_TTT_FILE}" ]; then
+    echo "INFO: Using global TTT file for data prep: ${HOST_GLOBAL_TTT_FILE}"
+    ADDITIONAL_BINDS="--bind ${HOST_GLOBAL_TTT_FILE}:${CONTAINER_MOUNTED_GLOBAL_TTT_FILE}:ro"
+    export RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_DATAPREP="${CONTAINER_MOUNTED_GLOBAL_TTT_FILE}"
+else
+    echo "INFO: Not using a specific global TTT override for data prep."
+    unset RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_DATAPREP # Ensure it's not set if file not found
+fi
+
+# Launch Apptainer
+# The %environment block in your SIF should set up COPPELIASIM_ROOT, LD_LIBRARY_PATH, QT_QPA_*, PYOPENGL_PLATFORM, etc.
+# The `source /opt/diffuser_venv/bin/activate` in %environment and %runscript handles the Python venv.
+apptainer exec --nv \
+  --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
+  --bind "/scratch-shared/tmp.lUdVGE8VOd":/scratch-shared/tmp.lUdVGE8VOd \
+  ${ADDITIONAL_BINDS}
+  "${CONTAINER_IMAGE_PATH}" \
+  bash -c "
+    set -e # Exit on error within this script block
+    echo '--- Inside Apptainer Container for Data Preparation ---'
+    echo 'Current user: $(whoami)'
+    echo 'PYTHONPATH: ${PYTHONPATH}'
+    echo 'LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}'
+    echo 'COPPELIASIM_ROOT: ${COPPELIASIM_ROOT}' # Should be set by %environment
+
+    # If you uncommented the optional TTT override above, you'd set the env var here:
+    if [ -n \"\${RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_DATAPREP}\" ]; then
+       export RLBENCH_OVERRIDE_TTT_FILE_PATH=\"\${RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_DATAPREP}\"
+       echo \"RLBENCH_OVERRIDE_TTT_FILE_PATH set to: \${RLBENCH_OVERRIDE_TTT_FILE_PATH}\"
+    fi
+
+    echo '--- Processing TRAIN split ---'
+    export MY_SPLIT='train' # Ensure quotes if there are special characters in future values
+    # The ENTRYPOINT_SCRIPT_IN_CONTAINER will inherit MY_RAW_RLBENCH_DATA_ROOT_ABS etc. from the host export
+    # and MY_SPLIT from the export just above.
+    ${ENTRYPOINT_SCRIPT_IN_CONTAINER}
+
+    echo '--- Processing VAL split ---'
+    export MY_SPLIT='val'
+    ${ENTRYPOINT_SCRIPT_IN_CONTAINER}
+
+    echo '--- Data Preparation Tasks in Container Finished ---'
+  "
+
+EXIT_CODE=$?
+echo "=== Slurm Job: 3D Diffuser Actor Data Preparation Finished with exit code $EXIT_CODE ==="
+exit $EXIT_CODE

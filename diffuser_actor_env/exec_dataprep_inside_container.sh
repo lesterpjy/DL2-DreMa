@@ -6,12 +6,17 @@ echo '--- Inside Container: exec_dataprep_inside_container.sh ---'
 echo "Current PWD: $(pwd)"
 
 # --- Environment Setup ---
-export COPPELIASIM_ROOT=/opt/coppeliaSim
-export LD_LIBRARY_PATH="${COPPELIASIM_ROOT}:${COPPELIASIM_ROOT}/platforms:${LD_LIBRARY_PATH}"
-export QT_QPA_PLATFORM_PLUGIN_PATH="${COPPELIASIM_ROOT}/platforms"
-export QT_QPA_PLATFORM="offscreen"
-export PYOPENGL_PLATFORM="egl"
-export LIBGL_ALWAYS_SOFTWARE="1"
+# export COPPELIASIM_ROOT=/opt/coppeliaSim
+echo "COPPELIASIM_ROOT: ${COPPELIASIM_ROOT}"
+# export LD_LIBRARY_PATH="${COPPELIASIM_ROOT}:${COPPELIASIM_ROOT}/platforms:${LD_LIBRARY_PATH}"
+echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}"
+# export QT_QPA_PLATFORM_PLUGIN_PATH="${COPPELIASIM_ROOT}/platforms"
+echo "QT_QPA_PLATFORM_PLUGIN_PATH: ${QT_QPA_PLATFORM_PLUGIN_PATH}"
+# export QT_QPA_PLATFORM="offscreen"
+echo "QT_QPA_PLATFORM: ${QT_QPA_PLATFORM}"
+# export PYOPENGL_PLATFORM="egl"
+echo "PYOPENGL_PLATFORM: ${PYOPENGL_PLATFORM}"
+# export LIBGL_ALWAYS_SOFTWARE="1"
 
 echo "Activating Python venv: /opt/diffuser_venv/bin/activate"
 source /opt/diffuser_venv/bin/activate
@@ -22,8 +27,8 @@ echo "PYTHONPATH updated to: $PYTHONPATH"
 
 # --- Clear CoppeliaSim user settings ---
 echo "Clearing CoppeliaSim user settings..."
-rm -rf /home/scur2683/.config/CoppeliaSim || true
-rm -rf /home/scur2683/.CoppeliaSim      || true
+rm -rf /root/.config/CoppeliaSim || true
+rm -rf /root/.CoppeliaSim     || true
 echo "User settings cleared."
 
 cd /dream-team/3d_diffuser_actor # Scripts will be called from here
