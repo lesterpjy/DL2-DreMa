@@ -9,6 +9,7 @@ echo "Current PWD: $(pwd)"
 export XDG_RUNTIME_DIR="/tmp/xdg_runtime_$(whoami)_$$" 
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 0700 "$XDG_RUNTIME_DIR"
+echo "XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR}"
 
 export COPPELIASIM_ROOT=/opt/coppeliaSim
 echo "COPPELIASIM_ROOT: ${COPPELIASIM_ROOT}"
