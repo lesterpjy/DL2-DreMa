@@ -60,10 +60,15 @@ fi
 COMMAND_INSIDE_CONTAINER="
     set -e # Exit on error within this script block
     echo '--- Inside Apptainer Container for Data Preparation ---'
+    # Attempt to source SIF-like environment (might not fully work as %runscript)
+    # but can help set PATH for venv activation if needed.
+    # Usually, %environment sets these globally.
+    source /opt/diffuser_venv/bin/activate # Usually done by %environment or %runscript
+
     echo 'Current user: $(whoami)'
-    echo 'PYTHONPATH: ${PYTHONPATH}'
-    echo 'LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}'
-    echo 'COPPELIASIM_ROOT: ${COPPELIASIM_ROOT}' # Should be set by %environment
+    echo 'Initial PYTHONPATH from SIF (expected): ${PYTHONPATH}'
+    echo 'Initial LD_LIBRARY_PATH from SIF (expected): ${LD_LIBRARY_PATH}'
+    echo 'Initial COPPELIASIM_ROOT from SIF (expected): ${COPPELIASIM_ROOT}'
 
     # If you uncommented the optional TTT override above, you'd set the env var here:
     if [ -n \"\${RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_DATAPREP}\" ]; then
