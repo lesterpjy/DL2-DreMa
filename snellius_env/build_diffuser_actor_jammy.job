@@ -1,7 +1,6 @@
 #!/bin/bash
-#SBATCH -p gpu_a100 
-#SBATCH --gpus=1
-#SBATCH -t 02:00:00 # Increase time if needed, installs can be slow
+#SBATCH -p  cbuild
+#SBATCH -t 00:20:00 # Increase time if needed, installs can be slow
 #SBATCH --job-name=build_diffuser_actor
 #SBATCH --output=work/build_diffuser_actor_jammy_%A.out
 

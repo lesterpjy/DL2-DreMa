@@ -51,12 +51,10 @@ PYTHON_EXEC_REARRANGE="./data_preprocessing/rearrange_rlbench_demos.py"
 PYTHON_EXEC_PACKAGE="./data_preprocessing/package_rlbench.py"
 
 # === Step 1: Re-render ===
-echo "--- Step 1: Re-rendering (using xvfb-run) ---"
+echo "--- Step 1: Re-rendering ---"
 for task_name in ${TASKS_TO_PROCESS}
 do
     echo "Re-rendering task: $task_name for split: ${MY_SPLIT}"
-    export QT_OPENGL=desktop
-    xvfb-run -a \
     python3 ${PYTHON_EXEC_RERENDER} \
         --tasks="$task_name" \
         --save_path="${RAW_HIGHRES_SAVE_PATH}" \

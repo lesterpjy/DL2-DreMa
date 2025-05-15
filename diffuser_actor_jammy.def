@@ -303,20 +303,29 @@ From: nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu22.04
         blosc \
         setuptools
 
-# ... (%environment and %runscript remain the same) ...
+
 %environment
     export COPPELIASIM_ROOT=/opt/coppeliaSim
-    export LD_LIBRARY_PATH=${COPPELIASIM_ROOT}:${LD_LIBRARY_PATH}
+    export LD_LIBRARY_PATH=${COPPELIASIM_ROOT}:${LD_LIBRARY_PATH} # Prepend to existing
     export QT_QPA_PLATFORM_PLUGIN_PATH=${COPPELIASIM_ROOT}/platforms
     export QT_QPA_PLATFORM=offscreen
     export PYOPENGL_PLATFORM=egl
-    export LIBGL_ALWAYS_SOFTWARE=1
-    source /opt/diffuser_venv/bin/activate
-    export PATH=/opt/diffuser_venv/bin:$PATH
-    export PYTHONPATH=/root/install/PyRep:/root/install/RLBench:${PYTHONPATH}
+    # export LIBGL_ALWAYS_SOFTWARE=1 # Keep commented unless proven necessary
+    export VENV_PATH=/opt/diffuser_venv
+    export PATH=${VENV_PATH}/bin:$PATH
+    export PYTHONPATH=/root/install/PyRep:/root/install/RLBench:${PYTHONPATH} # Add project paths if needed
 
 %runscript
-    echo "Activating Diffuser Actor venv..."
-    source /opt/diffuser_venv/bin/activate
-    echo "Executing command: $@"
+    #!/bin/bash
+    # This shebang ensures bash is used, so 'source' is available.
+    echo "--- SIF Runscript Start ---"
+    echo "Activating Diffuser Actor venv (from %runscript)..."
+    if [ -f /opt/diffuser_venv/bin/activate ]; then
+        source /opt/diffuser_venv/bin/activate
+    else
+        echo "WARNING: /opt/diffuser_venv/bin/activate not found in %runscript!"
+    fi
+    echo "Executing command (from %runscript): $@"
     exec "$@"
+    echo "--- SIF Runscript End ---" # Will not be reached if exec "$@" works
+
