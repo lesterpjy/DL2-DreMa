@@ -175,7 +175,7 @@ COMMAND_INSIDE_CONTAINER="
 
     echo '--- Checking existence of TTT file from shell BEFORE setting ENV var ---';
     ls -l '${CONTAINER_MOUNTED_GOOD_TTT_FILE}' || echo 'WARNING: ls -l failed for ${CONTAINER_MOUNTED_GOOD_TTT_FILE}';
-    
+
     # Set the environment variable to tell our modified RLBench to use the override
     export RLBENCH_OVERRIDE_TTT_FILE_PATH='${CONTAINER_MOUNTED_GOOD_TTT_FILE}'; 
     echo \"RLBENCH_OVERRIDE_TTT_FILE_PATH set to: \${RLBENCH_OVERRIDE_TTT_FILE_PATH}\";
@@ -235,7 +235,7 @@ mkdir -p "${PROJECT_ROOT_ON_HOST}/3d_diffuser_actor/Actor_18Peract_100Demo_multi
 
 singularity exec --nv \
   --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
-  --bind "/scratch-shared/tmp.lUdVGE8VOd":/scratch-shared/tmp.lUdVGE8VOd \
+  --bind "/scratch-shared":/scratch-shared \
   --bind "${HOST_PERACT_PACKAGED_DATA_ROOT}":"${CONTAINER_PERACT_PACKAGED_PATH}":ro \
   --bind "${HOST_GOOD_TTT_FILE}":"${CONTAINER_MOUNTED_GOOD_TTT_FILE}":ro \
   "${CONTAINER_IMAGE_PATH}" \
