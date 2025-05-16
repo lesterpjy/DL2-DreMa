@@ -1,0 +1,122 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100 # Using H100 as specified
+#SBATCH --gpus=1
+#SBATCH --output=work/preprocess_instructions_%A.out # Changed output log name
+#SBATCH --error=work/preprocess_instructions_%A.err  # Changed error log name
+#SBATCH --time=00:15:00 # Adjusted time, instruction preprocessing might be quicker
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8 # Reduced CPUs, might not need 16 for this script
+
+module purge
+module load 2023
+
+echo "=== Slurm Job: Starting RLBench Instruction Preprocessing ==="
+PROJECT_ROOT_ON_HOST=$(pwd)
+CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif" 
+
+# --- Configuration for the instruction preprocessing script ---
+# Define the tasks to process here. Convert to space-separated for the script.
+TASKS_ARRAY=("slide_block_to_color_target" "place_shape_in_shape_sorter")
+TASKS_TO_PROCESS_ARGS=$(IFS=" "; echo "${TASKS_ARRAY[*]}") # Converts array to space-separated string
+
+# Define where the output instructions.pkl will be saved (path inside the container)
+# This path needs to be accessible via bind mounts if you want it on the host's /scratch-shared
+# We'll bind /scratch-shared, so paths starting with /scratch-shared/... inside the container are fine.
+OUTPUT_PKL_FILE_IN_CONTAINER="/scratch-shared/tmp.lUdVGE8VOd/instruction_embeddings/instructions.pkl"
+OUTPUT_PKL_DIR_ON_HOST="/scratch-shared/tmp.lUdVGE8VOd/instruction_embeddings" # Host path for mkdir
+
+echo "Host Project Root: ${PROJECT_ROOT_ON_HOST}"
+echo "Container Image: ${CONTAINER_IMAGE_PATH}"
+echo "Tasks to process: ${TASKS_TO_PROCESS_ARGS}"
+echo "Output .pkl file (in container): ${OUTPUT_PKL_FILE_IN_CONTAINER}"
+
+# --- Ensure host output directory exists ---
+mkdir -p "${OUTPUT_PKL_DIR_ON_HOST}"
+echo "Host output directory for .pkl created/ensured: ${OUTPUT_PKL_DIR_ON_HOST}"
+
+# --- Global TTT file (from your previous setup, good to keep if RLBenchEnv needs it) ---
+HOST_GLOBAL_TTT_FILE="/scratch-shared/tmp.lUdVGE8VOd/good_rlbench_assets/task_design.ttt"
+CONTAINER_MOUNTED_GLOBAL_TTT_FILE="/good_assets_host/task_design.ttt" # RLBenchEnv might use this
+ADDITIONAL_BINDS=""
+if [ -f "${HOST_GLOBAL_TTT_FILE}" ]; then
+    echo "INFO: Using global TTT file: ${HOST_GLOBAL_TTT_FILE}, mounted as ${CONTAINER_MOUNTED_GLOBAL_TTT_FILE}"
+    ADDITIONAL_BINDS="--bind ${HOST_GLOBAL_TTT_FILE}:${CONTAINER_MOUNTED_GLOBAL_TTT_FILE}:ro"
+    # This env var is for your patched RLBench environment.py
+    export RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_SCRIPT="${CONTAINER_MOUNTED_GLOBAL_TTT_FILE}"
+else
+    echo "WARNING: Global TTT file not found at ${HOST_GLOBAL_TTT_FILE}. RLBench will use its default."
+    unset RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_SCRIPT
+fi
+
+# --- Annotation files (if you have any) ---
+# ANNOTATION_FILES_ON_HOST=("/path/to/host/anno1.json" "/path/to/host/anno2.json") # Example
+# ANNOTATION_ARGS_IN_CONTAINER=""
+# TEMP_ANNOTATION_BINDS=""
+# for i in "${!ANNOTATION_FILES_ON_HOST[@]}"; do
+#     host_file="${ANNOTATION_FILES_ON_HOST[$i]}"
+#     if [ -f "$host_file" ]; then
+#         container_file="/annotations/anno${i}.json"
+#         TEMP_ANNOTATION_BINDS+=" --bind ${host_file}:${container_file}:ro"
+#         ANNOTATION_ARGS_IN_CONTAINER+=" --annotations ${container_file}"
+#         echo "Binding annotation file: $host_file as $container_file"
+#     else
+#         echo "WARNING: Annotation file not found: $host_file"
+#     fi
+# done
+# ADDITIONAL_BINDS+="${TEMP_ANNOTATION_BINDS}"
+# --- End Annotation files ---
+
+
+COMMAND_INSIDE_CONTAINER="
+    set -e # Exit on error within this script block
+    echo '--- Inside Apptainer Container for Instruction Preprocessing ---'
+
+    # Environment sourcing should be handled by SIF's %environment and %runscript
+    # but explicit activation here ensures the correct venv for this command.
+    echo 'Activating Python venv: /opt/diffuser_venv/bin/activate'
+    source /opt/diffuser_venv/bin/activate
+
+    echo 'Current user: $(whoami)'
+    echo 'PYTHONPATH: ${PYTHONPATH}' # Should include PyRep, RLBench, and /dream-team from SIF %env
+    echo 'LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}'
+    echo 'COPPELIASIM_ROOT: ${COPPELIASIM_ROOT}'
+
+    # Set RLBENCH_OVERRIDE_TTT_FILE_PATH if it was defined by the host script
+    if [ -n \"\${RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_SCRIPT}\" ]; then
+       export RLBENCH_OVERRIDE_TTT_FILE_PATH=\"\${RLBENCH_OVERRIDE_TTT_FILE_PATH_FOR_SCRIPT}\"
+       echo \"RLBENCH_OVERRIDE_TTT_FILE_PATH set to: \${RLBENCH_OVERRIDE_TTT_FILE_PATH}\"
+    fi
+    
+    cd /dream-team/3d_diffuser_actor # Assuming preprocess_rlbench_instructions.py is in data_preprocessing subdir
+
+    echo 'Running preprocess_rlbench_instructions.py ...'
+    # The preprocess_rlbench_instructions.py script itself initializes RLBenchEnv,
+    # which launches CoppeliaSim. So, it needs xvfb-run.
+    xvfb-run -a python3 ./data_preprocessing/preprocess_rlbench_instructions.py \
+        --tasks ${TASKS_TO_PROCESS_ARGS} \
+        --output \"${OUTPUT_PKL_FILE_IN_CONTAINER}\" \
+        --device \"cuda\" \
+        # --annotations # Add ${ANNOTATION_ARGS_IN_CONTAINER} here if using annotations
+        # Add other arguments as needed, e.g., --batch_size, --encoder, --model_max_length
+
+    echo '--- Instruction Preprocessing Finished ---'
+"
+
+# Use apptainer (Singularity >=3.8 alias)
+apptainer exec --nv \
+  --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
+  --bind "/scratch-shared":/scratch-shared \
+  ${ADDITIONAL_BINDS} \
+  "${CONTAINER_IMAGE_PATH}" \
+  bash -c "${COMMAND_INSIDE_CONTAINER}"
+
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✅ Instruction preprocessing completed successfully. Output should be at ${OUTPUT_PKL_DIR_ON_HOST}/instructions.pkl (on host)"
+else
+    echo "❌ Instruction preprocessing failed with exit code ${EXIT_CODE}"
+fi
+
+echo "=== Slurm Job: RLBench Instruction Preprocessing Finished ==="
+exit $EXIT_CODE

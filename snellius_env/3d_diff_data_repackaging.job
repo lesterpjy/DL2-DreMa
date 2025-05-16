@@ -1,8 +1,7 @@
 #!/bin/bash
-#SBATCH --partition=gpu_h100
+#SBATCH --partition=gpu_a100
 #SBATCH --gpus=1
-#SBATCH --output=work/diffuser_dataprep_new_sif_%A.out
-#SBATCH --error=work/diffuser_dataprep_new_sif_%A.err
+#SBATCH --output=work/diffuser_dataprep_%A.out
 #SBATCH --time=00:05:00 # Consider increasing if processing many tasks/variations
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
