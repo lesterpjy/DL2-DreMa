@@ -310,6 +310,10 @@ From: nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu22.04
     export QT_QPA_PLATFORM_PLUGIN_PATH=${COPPELIASIM_ROOT}/platforms
     export QT_QPA_PLATFORM=offscreen
     export PYOPENGL_PLATFORM=egl
+    # peract repo hotfix
+    export DISPLAY=:0
+    export MESA_GL_VERSION_OVERRIDE=4.1
+
     # export LIBGL_ALWAYS_SOFTWARE=1 # Keep commented unless proven necessary
     export VENV_PATH=/opt/diffuser_venv
     export PATH=${VENV_PATH}/bin:$PATH

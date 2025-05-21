@@ -3,7 +3,7 @@
 #SBATCH --gpus=1
 #SBATCH --output=work/diffuser_train_peract_%A.out
 #SBATCH --error=work/diffuser_train_peract_%A.err
-#SBATCH --time=00:10:00
+#SBATCH --time=15:00:00
 #SBATCH --ntasks=1
 
 module purge
@@ -14,7 +14,7 @@ PROJECT_ROOT_ON_HOST=$(pwd) # /gpfs/home4/scur2683/dream-team
 CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif"
 
 # --- Path to the pre-packaged PerAct data on the host ---
-HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_packaged" # Contains train/ and val/
+HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_onetask_repackaged" # Contains train/ and val/
 
 # --- Path where this data will be accessible inside the container ---
 # The training script expects paths like 'data/peract/Peract_packaged/train'
@@ -86,7 +86,7 @@ dense_interpolation="1"
 interpolation_length="2"
 num_history="3"
 diffusion_timesteps="100"
-B="1" # Batch size
+B="4" # Batch size
 C="120" # Embedding dim
 # ngpus="1" # torchrun will use the 1 GPU made visible by Slurm with --gpus=1.
            # If you request more in Slurm (--gpus=N), torchrun can use N.
@@ -96,172 +96,9 @@ ngpus_torchrun="1" # For a single GPU job as requested by Slurm.
 quaternion_format="xyzw"
 
 
-# COMMAND_INSIDE_CONTAINER="
-#     set -e # Exit on error within this script block
-#     echo '--- Inside Container for Training ---'
-
-#     # Optional: Activate venv if not done by SIF's %environment or %runscript
-#     # The SIF's %environment SHOULD handle this.
-#     # echo 'Activating Python venv: /opt/diffuser_venv/bin/activate'
-#     # source /opt/diffuser_venv/bin/activate
-
-#     echo 'Current user: $(whoami)'
-#     echo 'PYTHONPATH: ${PYTHONPATH}'
-#     echo 'LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}'
-#     echo 'COPPELIASIM_ROOT: ${COPPELIASIM_ROOT}'
-#     echo 'QT_QPA_PLATFORM: ${QT_QPA_PLATFORM}'
-#     echo 'PYOPENGL_PLATFORM: ${PYOPENGL_PLATFORM}'
-
-#     # Optional: Override TTT file path if needed by the training script
-#     # if [ -n \"\${HOST_GOOD_TTT_FILE}\" ]; then # Check if host path was valid
-#     #    export RLBENCH_OVERRIDE_TTT_FILE_PATH='${CONTAINER_MOUNTED_GOOD_TTT_FILE}'
-#     #    echo \"RLBENCH_OVERRIDE_TTT_FILE_PATH set to: \${RLBENCH_OVERRIDE_TTT_FILE_PATH}\"
-#     #    ls -l \"\${RLBENCH_OVERRIDE_TTT_FILE_PATH}\"
-#     # fi
-
-#     cd /dream-team/3d_diffuser_actor # IMPORTANT: Run from the project's root directory for relative paths
-
-#     echo \"Creating output directory: ${main_dir_in_container}\"
-#     mkdir -p \"${main_dir_in_container}\"
-
-#     echo 'Starting training script...'
-#     export CUDA_LAUNCH_BLOCKING=1 # From original script, good for debugging CUDA errors
-    
-#     # If main_trajectory.py *does* end up needing simulator, wrap with xvfb-run:
-#     xvfb-run -a torchrun --nproc_per_node ${ngpus_torchrun} --master_port \$((\$RANDOM % 10000 + 20000)) \\
-#         main_trajectory.py \\
-#         --tasks slide_block_to_color_target \\
-#         --dataset \"${dataset_in_container}\" \\
-#         --valset \"${valset_in_container}\" \\
-#         --instructions \"${instructions_in_container}\" \\
-#         --gripper_loc_bounds \"${gripper_loc_bounds_in_container}\" \\
-#         --num_workers 1 \\
-#         --train_iters 5 \\ # Reduced for a quick test, original was 600000
-#         --embedding_dim ${C} \\
-#         --use_instruction 1 \\
-#         --rotation_parametrization 6D \\
-#         --diffusion_timesteps ${diffusion_timesteps} \\
-#         --val_freq 1 \\ # Reduced for a quick test, original was 4000
-#         --dense_interpolation ${dense_interpolation} \\
-#         --interpolation_length ${interpolation_length} \\
-#         --exp_log_dir \"${main_dir_in_container}\" \\
-#         --batch_size ${B} \\
-#         --batch_size_val 2 \\ # Reduced for a quick test, original was 14
-#         --cache_size 100 \\ # Reduced for a quick test, original was 600
-#         --cache_size_val 0 \\
-#         --keypose_only 1 \\
-#         --variations {0..1} \\ # Reduced for a quick test, original was {0..199}
-#         --lr ${lr} \\
-#         --num_history ${num_history} \\
-#         --cameras left_shoulder right_shoulder wrist front \\
-#         --max_episodes_per_task 10 \\ # Reduced for a quick test, original was -1
-#         --quaternion_format ${quaternion_format} \\
-#         --run_log_dir diffusion_multitask-C${C}-B${B}-lr${lr}-DI${dense_interpolation}-${interpolation_length}-H${num_history}-DT${diffusion_timesteps}_QUICKTEST
-
-#     echo 'Training script finished.'
-# "
-
-# COMMAND_INSIDE_CONTAINER="
-#     set -e # Exit on error within this script block
-#     echo '--- Inside Apptainer Container for Training (COMMAND_INSIDE_CONTAINER) ---'
-#     
-#     # The %runscript of the SIF should have already activated the venv.
-#     # Verify:
-#     echo \"Current user: \$(whoami)\"
-#     echo \"which python: \$(which python)\" # Should point to venv python
-#     echo \"PYTHONPATH (after SIF runscript): \${PYTHONPATH}\"
-#     echo \"LD_LIBRARY_PATH (after SIF runscript): \${LD_LIBRARY_PATH}\"
-#     echo \"COPPELIASIM_ROOT (after SIF runscript): \${COPPELIASIM_ROOT}\"
-# 
-#     echo '--- Checking existence of TTT file from shell BEFORE setting ENV var ---';
-#     ls -l '${CONTAINER_MOUNTED_GOOD_TTT_FILE}' || echo 'WARNING: ls -l failed for ${CONTAINER_MOUNTED_GOOD_TTT_FILE}';
-# 
-#     # Set the environment variable to tell our modified RLBench to use the override
-#     export RLBENCH_OVERRIDE_TTT_FILE_PATH='${CONTAINER_MOUNTED_GOOD_TTT_FILE}'; 
-#     echo \"RLBENCH_OVERRIDE_TTT_FILE_PATH set to: \${RLBENCH_OVERRIDE_TTT_FILE_PATH}\";
-#     echo '--- Checking existence of TTT file from shell AFTER setting ENV var (should be same) ---';
-#     ls -l \"\${RLBENCH_OVERRIDE_TTT_FILE_PATH}\" || echo 'WARNING: ls -l failed for \${RLBENCH_OVERRIDE_TTT_FILE_PATH}';
-# 
-#     # Check if /dream-team is mounted
-#     echo \"Listing /dream-team:\"
-#     ls -l /dream-team
-# 
-#     cd /dream-team/3d_diffuser_actor # This MUST work if bind mount is successful
-#     echo \"Current PWD: \$(pwd)\"
-# 
-#     echo \"Creating output directory: ${main_dir_in_container}\" # main_dir_in_container needs to be defined
-#     mkdir -p \"${main_dir_in_container}\"
-# 
-#     echo 'Starting training script...'
-#     export CUDA_LAUNCH_BLOCKING=1 
-#     export CUDNN_LOGINFO_DBG=1
-#     export CUDNN_LOGDEST_DBG=stdout
-# 
-#     echo "NVIDIA-SMI:"
-#     nvidia-smi
-# 
-#     # xvfb-run -a # Only if needed
-#     torchrun --nproc_per_node ${ngpus_torchrun} --master_port \$((\$RANDOM % 10000 + 20000)) \\
-#         main_trajectory.py \\
-#         --tasks slide_block_to_color_target \\
-#         --dataset \"${dataset_in_container}\" \\
-#         --valset \"${valset_in_container}\" \\
-#         --instructions \"${instructions_in_container}\" \\
-#         --gripper_loc_bounds \"${gripper_loc_bounds_in_container}\" \\
-#         --num_workers 1 \\
-#         --train_iters 3 \\
-#         --embedding_dim ${C} \\
-#         --use_instruction 1 \\
-#         --rotation_parametrization 6D \\
-#         --diffusion_timesteps ${diffusion_timesteps} \\
-#         --val_freq 1 \\
-#         --dense_interpolation ${dense_interpolation} \\
-#         --interpolation_length ${interpolation_length} \\
-#         --exp_log_dir \"${main_dir_in_container}\" \\
-#         --batch_size ${B} \\
-#         --batch_size_val 1 \\
-#         --cache_size 100 \\
-#         --cache_size_val 0 \\
-#         --keypose_only 1 \\
-#         --variations {0..1} \\
-#         --lr ${lr} \\
-#         --num_history ${num_history} \\
-#         --cameras left_shoulder right_shoulder wrist front \\
-#         --max_episodes_per_task 10 \\
-#         --quaternion_format ${quaternion_format} \\
-#         --run_log_dir diffusion_multitask-C${C}-B${B}-lr${lr}-DI${dense_interpolation}-${interpolation_length}-H${num_history}-DT${diffusion_timesteps}_QUICKTEST
-# 
-#     echo 'Training script finished.'
-# "
-
-# COMMAND_INSIDE_CONTAINER ="
-#     echo "--- Verifying Python Environment ---"
-#     echo "Initial PATH: $PATH"
-#     if [ -f /opt/diffuser_venv/bin/activate ]; then
-#         echo "Sourcing /opt/diffuser_venv/bin/activate manually for verification..."
-#         source /opt/diffuser_venv/bin/activate
-#         echo "PATH after manual source: $PATH"
-#     else
-#         echo "WARNING: /opt/diffuser_venv/bin/activate not found for manual sourcing!"
-#     fi
-#     echo "which python: $(which python || echo 'which python command failed')"
-#     echo "python --version: $(python --version || echo 'python --version command failed')"
-#     echo "pip --version: $(pip --version || echo 'pip --version command failed')"
-#     echo "--- End Python Environment Verification ---"
-#     python test_conv.py
-# "
-
 # Ensure the host directory for output exists and is writable
 # This is where main_dir_in_container will effectively write if it's part of /dream-team
 mkdir -p "${PROJECT_ROOT_ON_HOST}/3d_diffuser_actor/Actor_18Peract_100Demo_multitask_output"
-
-# apptainer exec --nv \
-#   --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
-#   --bind "/scratch-shared":/scratch-shared \
-#   --bind "${HOST_PERACT_PACKAGED_DATA_ROOT}":"${CONTAINER_PERACT_PACKAGED_PATH}":ro \
-#   --bind "${HOST_GOOD_TTT_FILE}":"${CONTAINER_MOUNTED_GOOD_TTT_FILE}":ro \
-#   "${CONTAINER_IMAGE_PATH}" \
-#   bash -c "${COMMAND_INSIDE_CONTAINER}"
 
 apptainer exec --nv \
   --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
@@ -314,8 +151,6 @@ apptainer exec --nv \
 
     echo "Starting training script..."
     export CUDA_LAUNCH_BLOCKING=1
-    export CUDNN_LOGINFO_DBG=1
-    export CUDNN_LOGDEST_DBG=stdout
 
     echo "NVIDIA-SMI:"
     nvidia-smi
@@ -329,25 +164,25 @@ apptainer exec --nv \
         --instructions "'"$(echo "${instructions_in_container}")"'" \
         --gripper_loc_bounds "'"$(echo "${gripper_loc_bounds_in_container}")"'" \
         --num_workers 1 \
-        --train_iters 3 \
+        --train_iters 60000 \
         --embedding_dim '"${C}"' \
         --use_instruction 1 \
         --rotation_parametrization 6D \
         --diffusion_timesteps '"${diffusion_timesteps}"' \
-        --val_freq 1 \
+        --val_freq 1000 \
         --dense_interpolation '"${dense_interpolation}"' \
         --interpolation_length '"${interpolation_length}"' \
         --exp_log_dir "'"$(echo "${main_dir_in_container}")"'" \
         --batch_size '"${B}"' \
-        --batch_size_val 1 \
-        --cache_size 100 \
+        --batch_size_val 8 \
+        --cache_size 600 \
         --cache_size_val 0 \
         --keypose_only 1 \
-        --variations {0..1} \
+        --variations {0..3} \
         --lr '"${lr}"' \
         --num_history '"${num_history}"' \
         --cameras left_shoulder right_shoulder wrist front \
-        --max_episodes_per_task 10 \
+        --max_episodes_per_task -1 \
         --quaternion_format '"${quaternion_format}"' \
         --run_log_dir diffusion_multitask-C${C}-B${B}-lr${lr}-DI${dense_interpolation}-${interpolation_length}-H${num_history}-DT${diffusion_timesteps}_QUICKTEST
 
