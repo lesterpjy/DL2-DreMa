@@ -18,9 +18,7 @@ For the RLBench + DreaMa dataset (referred to as “mixed”), the data must fir
 
 ### Training and Evaluating
 
-To run the training job for the original RLBench data on the `slide_block_to_color_target` task, uncomment `HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_onetask_repackaged"` and comment `HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask_repackaged"` in the job file `snellius_env/3d_diff_training.job`. This binds the scratch-shared directory on Snellius where we have placed the original task data repacked for 3D Diffuser Actor, which we repackaged following the [data preparation readme](https://github.com/nickgkan/3d_diffuser_actor/blob/e3efaa9a5f7f6fe40de5511ca645295f7b0230b9/docs/DATA_PREPARATION_RLBENCH.md) provided by the project. We do not upscale the image for fair comparison.
-
-Similarly we repakcaged DreMa's `slide_block_to_color_target` task data follwoing the guideline. Uncomment `HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask_repackaged"` to use the repackaged mixed dataset, which includes both the original RLBench data for the task and DreMa's generated data for the task. Alternatively point `HOST_PERACT_PACKAGED_DATA_ROOT` to where you have placed these data. 
+To run the training job on the `slide_block_to_color_target` task, export the env variable `HOST_PERACT_PACKAGED_DATA_ROOT` with the location of the training data. For example, for the origianl RLBench data we point to `"/scratch-shared/tmp.lUdVGE8VOd/Peract_onetask_repackaged"` and for the mixed data, we use `"/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask_repackaged"` in the job file `snellius_env/3d_diff_training.job`. This binds the scratch-shared directory on Snellius where we have placed the task data repacked for 3D Diffuser Actor, which we repackaged following the [data preparation readme](https://github.com/nickgkan/3d_diffuser_actor/blob/e3efaa9a5f7f6fe40de5511ca645295f7b0230b9/docs/DATA_PREPARATION_RLBENCH.md) provided by the project. We do not upscale the image for a fair comparison with PerAct.
 
 Run the training job with `sbatch snellius_env/3d_diff_training.job`.
 
