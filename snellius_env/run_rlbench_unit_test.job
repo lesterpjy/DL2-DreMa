@@ -1,0 +1,62 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100 # Or cpu_short
+#SBATCH --gpus=1             # If using GPU partition
+#SBATCH --output=work/rlbench_unit_test_override_ttt_confirmation_%A.out
+#SBATCH --error=work/rlbench_unit_test_override_ttt_%A.err
+#SBATCH --time=00:20:00
+#SBATCH --ntasks=1
+
+module purge
+module load 2023
+
+echo "=== Slurm Job: Running RLBench Unit Test with Overridden TTT (via ENV var) ==="
+PROJECT_ROOT_ON_HOST=$(pwd)
+CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif" # Your SIF with forked PyRep & RLBench
+
+# --- Path to your known-good task_design.ttt on the host ---
+HOST_GOOD_TTT_FILE="/scratch-shared/tmp.lUdVGE8VOd/good_rlbench_assets/task_design.ttt"
+# --- Path where this will be mounted inside the container ---
+CONTAINER_MOUNTED_GOOD_TTT_FILE="/good_assets_host/task_design.ttt" # Matches bind mount below
+
+if [ ! -f "${HOST_GOOD_TTT_FILE}" ]; then
+    echo "ERROR: Known-good TTT file not found at ${HOST_GOOD_TTT_FILE} on the HOST" # Clarified HOST
+    exit 1
+else
+    echo "INFO: Found known-good TTT file at ${HOST_GOOD_TTT_FILE} on the HOST"
+fi
+
+COMMAND_INSIDE_CONTAINER="
+    echo '--- Inside Container ---';
+    echo '--- Checking existence of TTT file from shell BEFORE setting ENV var ---';
+    ls -l '${CONTAINER_MOUNTED_GOOD_TTT_FILE}' || echo 'WARNING: ls -l failed for ${CONTAINER_MOUNTED_GOOD_TTT_FILE}';
+    
+    # Set the environment variable to tell our modified RLBench to use the override
+    export RLBENCH_OVERRIDE_TTT_FILE_PATH='${CONTAINER_MOUNTED_GOOD_TTT_FILE}'; 
+    echo \"RLBENCH_OVERRIDE_TTT_FILE_PATH set to: \${RLBENCH_OVERRIDE_TTT_FILE_PATH}\";
+
+    echo '--- Checking existence of TTT file from shell AFTER setting ENV var (should be same) ---';
+    ls -l \"\${RLBENCH_OVERRIDE_TTT_FILE_PATH}\" || echo 'WARNING: ls -l failed for \${RLBENCH_OVERRIDE_TTT_FILE_PATH}';
+
+    cd /root/install/RLBench/tests/unit && \
+    echo 'Current PWD inside container: ' \$(pwd) && \
+    echo \"PYTHONPATH inside container (from %%environment): \${PYTHONPATH}\" && \
+    echo 'Attempting to run: python3 -m unittest -v test_environment.TestEnvironment.test_get_task' && \
+    xvfb-run -a python3 -m unittest -v test_environment.TestEnvironment.test_get_task
+"
+
+echo "Host Project Root: ${PROJECT_ROOT_ON_HOST}"
+echo "Host TTT file: ${HOST_GOOD_TTT_FILE}"
+echo "Container TTT file path: ${CONTAINER_MOUNTED_GOOD_TTT_FILE}"
+echo "Container Image: ${CONTAINER_IMAGE_PATH}"
+echo "Command to be executed inside container: ${COMMAND_INSIDE_CONTAINER}"
+
+singularity exec --nv \
+  --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
+  --bind "/scratch-shared/tmp.lUdVGE8VOd":/scratch-shared/tmp.lUdVGE8VOd \
+  --bind "${HOST_GOOD_TTT_FILE}":"${CONTAINER_MOUNTED_GOOD_TTT_FILE}":ro \
+  "${CONTAINER_IMAGE_PATH}" \
+  bash -c "${COMMAND_INSIDE_CONTAINER}"
+
+EXIT_CODE=$?
+echo "=== Slurm Job: RLBench Unit Test Finished with exit code $EXIT_CODE ==="
+exit $EXIT_CODE

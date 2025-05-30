@@ -1,0 +1,11 @@
+#!/bin/bash
+export COPPELIASIM_ROOT=/opt/coppeliaSim
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$COPPELIASIM_ROOT"
+export QT_QPA_PLATFORM_PLUGIN_PATH=$COPPELIASIM_ROOT
+export QT_QPA_PLATFORM=offscreen
+export PYOPENGL_PLATFORM=egl
+export LIBGL_ALWAYS_SOFTWARE=1
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
+
+# exec the given command
+# exec "$@"

@@ -1,0 +1,51 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --output=work/diffuser_dataprep_new_sif_%A.out # New log name
+#SBATCH --error=work/diffuser_dataprep_new_sif_%A.err # New log name
+#SBATCH --time=01:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+
+module purge
+module load 2023
+
+echo "=== Slurm Job: Starting 3D Diffuser Actor Data Preparation (using NEW SIF) ==="
+PROJECT_ROOT_ON_HOST=$(pwd)
+# --- USE THE NEW CONTAINER ---
+CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif" 
+ENTRYPOINT_SCRIPT_IN_CONTAINER="/dream-team/diffuser_actor_env/exec_dataprep_inside_container.sh"
+
+# --- Configuration passed as Environment Variables ---
+export MY_RAW_RLBENCH_DATA_ROOT_ABS="/scratch-shared/tmp.lUdVGE8VOd/rlbench"
+export MY_OUTPUT_RAW_HIGHRES_ROOT_ABS="/scratch-shared/tmp.lUdVGE8VOd/Peract_raw_highres_tasks"
+export MY_OUTPUT_PACKAGED_ROOT_ABS="/scratch-shared/tmp.lUdVGE8VOd/Peract_packaged_tasks"
+export TASKS_TO_PROCESS="place_shape_in_shape_sorter"
+
+echo "Host Project Root: ${PROJECT_ROOT_ON_HOST}"
+echo "Container Image: ${CONTAINER_IMAGE_PATH}" # Verify it points to the new SIF
+# ... other echos ...
+
+mkdir -p "${MY_OUTPUT_RAW_HIGHRES_ROOT_ABS}/train" "${MY_OUTPUT_RAW_HIGHRES_ROOT_ABS}/val"
+mkdir -p "${MY_OUTPUT_PACKAGED_ROOT_ABS}/train" "${MY_OUTPUT_PACKAGED_ROOT_ABS}/val"
+
+chmod +x "${PROJECT_ROOT_ON_HOST}/diffuser_actor_env/exec_dataprep_inside_container.sh"
+
+# Launch Apptainer - NO host lib bind mount needed now
+apptainer exec --nv \
+  --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
+  --bind "/scratch-shared":/scratch-shared \
+  "${CONTAINER_IMAGE_PATH}" \
+  bash -c "
+    echo '--- Processing TRAIN split ---'
+    export MY_SPLIT=train
+    ${ENTRYPOINT_SCRIPT_IN_CONTAINER}
+
+    echo '--- Processing VAL split ---'
+    export MY_SPLIT=val
+    ${ENTRYPOINT_SCRIPT_IN_CONTAINER}
+  "
+
+EXIT_CODE=$?
+echo "=== Slurm Job: 3D Diffuser Actor Data Preparation Finished with exit code $EXIT_CODE ==="
+exit $EXIT_CODE

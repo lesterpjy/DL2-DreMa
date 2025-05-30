@@ -1,0 +1,161 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --output=work/diffuser_eval_peract_%A.out
+#SBATCH --time=00:30:00
+#SBATCH --ntasks=1
+
+module purge
+module load 2023
+
+echo "=== Slurm Job: Starting 3D Diffuser Actor EVALUATION (PerAct Setup) ==="
+PROJECT_ROOT_ON_HOST=$(pwd)
+CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif"
+
+HOST_PERACT_RAW_TEST_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/3d_diff_packaged/test"
+CONTAINER_PERACT_RAW_TEST_DATA_PATH_IN_CONTAINER="/dream-team/3d_diffuser_actor/data/peract/raw/test"
+
+if [ ! -d "${HOST_PERACT_RAW_TEST_DATA_ROOT}" ]; then
+    echo "ERROR: Host PerAct RAW TEST data directory not found at ${HOST_PERACT_RAW_TEST_DATA_ROOT}"
+    exit 1
+fi
+
+HOST_GOOD_ASSETS_DIR="/scratch-shared/tmp.lUdVGE8VOd/good_rlbench_assets"
+CONTAINER_MOUNTED_ASSETS_DIR="/mounted_rlbench_assets"
+TTT_FILENAME_IN_ASSETS="task_design.ttt"
+CONTAINER_SIDE_FULL_TTT_PATH="${CONTAINER_MOUNTED_ASSETS_DIR}/${TTT_FILENAME_IN_ASSETS}"
+
+if [ ! -d "${HOST_GOOD_ASSETS_DIR}" ]; then
+    echo "ERROR: Host RLBench assets directory not found at ${HOST_GOOD_ASSETS_DIR}"
+    exit 1
+elif [ ! -f "${HOST_GOOD_ASSETS_DIR}/${TTT_FILENAME_IN_ASSETS}" ]; then
+    echo "ERROR: TTT file ${TTT_FILENAME_IN_ASSETS} not found within ${HOST_GOOD_ASSETS_DIR} on the HOST"
+    exit 1
+fi
+
+HOST_CHECKPOINT_FILE_PATH="${PROJECT_ROOT_ON_HOST}/3d_diff_temp_best.pth"
+if [ ! -f "${HOST_CHECKPOINT_FILE_PATH}" ]; then
+    echo "ERROR: Checkpoint file NOT found at host path: ${HOST_CHECKPOINT_FILE_PATH}"
+    exit 1
+fi
+
+echo "Host Project Root: ${PROJECT_ROOT_ON_HOST}"
+echo "Container Image: ${CONTAINER_IMAGE_PATH}"
+echo "Container RLBench TTT file will be at: ${CONTAINER_SIDE_FULL_TTT_PATH}"
+
+HOST_EVAL_OUTPUT_DIR="${PROJECT_ROOT_ON_HOST}/3d_diffuser_actor/eval_logs/3d_diffuser_actor/seed0"
+mkdir -p "${HOST_EVAL_OUTPUT_DIR}"
+
+apptainer exec --nv \
+  --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
+  --bind "/scratch-shared":/scratch-shared \
+  --bind "${HOST_PERACT_RAW_TEST_DATA_ROOT}":"${CONTAINER_PERACT_RAW_TEST_DATA_PATH_IN_CONTAINER}":rw \
+  --bind "${HOST_GOOD_ASSETS_DIR}":"${CONTAINER_MOUNTED_ASSETS_DIR}":ro \
+  --env PASSED_RLBENCH_TTT_PATH="${CONTAINER_SIDE_FULL_TTT_PATH}" \
+  "${CONTAINER_IMAGE_PATH}" \
+  /bin/bash -c '
+    set -e
+    echo "--- Inside Apptainer Container for EVALUATION ---"
+
+    export QT_QPA_PLATFORM="offscreen"
+    export LIBGL_ALWAYS_SOFTWARE="1"
+    export RLBENCH_PROJECT_ROOT="/root/install/RLBench"
+    export RLBENCH_TASKS_ASSETS="${RLBENCH_PROJECT_ROOT}/rlbench/assets"
+    
+    export XDG_RUNTIME_DIR="/tmp/xdg_runtime_$(whoami)_${SLURM_JOB_ID}_$$"
+    export XDG_CACHE_HOME="/tmp/xdg_cache_$(whoami)_${SLURM_JOB_ID}_$$"
+    export XDG_CONFIG_HOME="/tmp/xdg_config_$(whoami)_${SLURM_JOB_ID}_$$"
+    
+    mkdir -p "$XDG_RUNTIME_DIR" "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME"
+    chmod 0700 "$XDG_RUNTIME_DIR"
+    echo "Effective XDG_RUNTIME_DIR: $XDG_RUNTIME_DIR"
+    echo "Effective QT_QPA_PLATFORM: $QT_QPA_PLATFORM"
+    echo "Effective LIBGL_ALWAYS_SOFTWARE: $LIBGL_ALWAYS_SOFTWARE"
+    echo "Effective RLBENCH_PROJECT_ROOT: $RLBENCH_PROJECT_ROOT"
+    echo "Effective RLBENCH_TASKS_ASSETS: $RLBENCH_TASKS_ASSETS"
+
+    export RLBENCH_OVERRIDE_TTT_FILE_PATH="${PASSED_RLBENCH_TTT_PATH}"
+    echo "RLBENCH_OVERRIDE_TTT_FILE_PATH set to: ${RLBENCH_OVERRIDE_TTT_FILE_PATH}"
+    
+    cd /dream-team/3d_diffuser_actor
+    echo "Current PWD: $(pwd)"
+
+    echo "--- Listing contents of the data directory base passed to RLBenchEnv ---"
+    DATA_DIR_ARG_FROM_SCRIPT="data/peract/raw/test"
+    echo "Listing (ls -l): ${DATA_DIR_ARG_FROM_SCRIPT}"
+    ls -l "${DATA_DIR_ARG_FROM_SCRIPT}"
+    echo "Recursive Listing (ls -Rlah) of task-specific directory: ${DATA_DIR_ARG_FROM_SCRIPT}/slide_block_to_color_target"
+    ls -Rlah "${DATA_DIR_ARG_FROM_SCRIPT}/slide_block_to_color_target" || echo "Task-specific directory listing failed or dir does not exist."
+    echo "--- End Listing ---"
+    
+    echo "Starting full evaluation script..."
+    export CUDA_LAUNCH_BLOCKING=1
+
+    # --- evaluation script parameters ---
+    exp=3d_diffuser_actor
+    tasks=(slide_block_to_color_target)
+    data_dir=./data/peract/raw/test/
+    num_episodes=1 
+    gripper_loc_bounds_file=tasks/18_peract_tasks_location_bounds.json
+    use_instruction=1
+    max_tries=2
+    verbose=1
+    interpolation_length=2
+    single_task_gripper_loc_bounds=0
+    embedding_dim=120
+    cameras="left_shoulder,right_shoulder,wrist,front"
+    fps_subsampling_factor=5
+    lang_enhanced=0
+    relative_action=0
+    seed=0
+    checkpoint="../3d_diff_temp_best.pth"
+    quaternion_format=xyzw 
+
+    num_ckpts=${#tasks[@]}
+
+    for ((i=0; i<$num_ckpts; i++)); do
+        echo "--- Evaluating task: ${tasks[$i]} ---"
+        xvfb-run -a -e /tmp/xvfb_error_eval.log python3 online_evaluation_rlbench/evaluate_policy.py \
+            --tasks ${tasks[$i]} \
+            --checkpoint "${checkpoint}" \
+            --diffusion_timesteps 100 \
+            --fps_subsampling_factor $fps_subsampling_factor \
+            --lang_enhanced $lang_enhanced \
+            --relative_action $relative_action \
+            --num_history 3 \
+            --test_model 3d_diffuser_actor \
+            --cameras $cameras \
+            --verbose $verbose \
+            --action_dim 8 \
+            --collision_checking 0 \
+            --predict_trajectory 1 \
+            --embedding_dim $embedding_dim \
+            --rotation_parametrization "6D" \
+            --single_task_gripper_loc_bounds $single_task_gripper_loc_bounds \
+            --data_dir "$data_dir" \
+            --num_episodes $num_episodes \
+            --output_file eval_logs/$exp/seed$seed/${tasks[$i]}.json  \
+            --use_instruction $use_instruction \
+            --instructions ../instructions/peract/instructions.pkl \
+            --variations {0..3} \
+            --max_tries $max_tries \
+            --max_steps 25 \
+            --seed $seed \
+            --gripper_loc_bounds_file "$gripper_loc_bounds_file" \
+            --gripper_loc_bounds_buffer 0.04 \
+            --quaternion_format "$quaternion_format" \
+            --interpolation_length $interpolation_length \
+            --dense_interpolation 1 \
+            --headless 1 # <<< --- ADDED THIS LINE ---
+        echo "--- Finished task: ${tasks[$i]} ---"
+    done
+
+    echo "Evaluation script finished."
+    if [ -n "$XDG_RUNTIME_DIR" ] && [ -d "$XDG_RUNTIME_DIR" ]; then echo "Cleaning up $XDG_RUNTIME_DIR"; rm -rf "$XDG_RUNTIME_DIR"; fi
+    if [ -n "$XDG_CACHE_HOME" ] && [ -d "$XDG_CACHE_HOME" ]; then echo "Cleaning up $XDG_CACHE_HOME"; rm -rf "$XDG_CACHE_HOME"; fi
+    if [ -n "$XDG_CONFIG_HOME" ] && [ -d "$XDG_CONFIG_HOME" ]; then echo "Cleaning up $XDG_CONFIG_HOME"; rm -rf "$XDG_CONFIG_HOME"; fi
+'
+
+HOST_SCRIPT_EXIT_CODE=$?
+echo "=== Slurm Job: 3D Diffuser Actor EVALUATION Finished with exit code $HOST_SCRIPT_EXIT_CODE ==="
+exit $HOST_SCRIPT_EXIT_CODE
