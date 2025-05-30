@@ -1,0 +1,77 @@
+#!/bin/bash
+#SBATCH --job-name=peract_eval
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=9
+#SBATCH --time=02:00:00
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --output=/home/scur2683/dream-team/leo_docker/peract_eval_logs/eval_peract_%A.out
+
+# --- User Configuration ---
+IMAGE_PATH="/home/scur2683/dream-team/peract_jammy.sif"
+#IMAGE_PATH="/home/scur2683/dream-team/leo_docker/rvt2_image.sif"
+PROJECT_DIR="/home/scur2683/dream-team"
+SCRATCH_DIR="/scratch-shared/tmp.lUdVGE8VOd"
+
+HPC_CHECKPOINT_PATH="${PROJECT_DIR}/outputs/logs/slide_block_to_color_target/PERACT_BC/seed0/weights/100000"
+HPC_DEMO_PATH="${SCRATCH_DIR}/rlbench_moved/val/slide_block_to_color_target"
+HPC_LOG_DIR="${PROJECT_DIR}/leo_docker/peract_eval_outputs/eval_peract_${SLURM_JOB_ID}"
+
+# Path to the script that will run INSIDE the container
+HPC_INNER_SCRIPT_PATH="${PROJECT_DIR}/leo_docker/container_script_p.sh" # Ensure this path is correct
+
+# Paths *inside* the container
+CONTAINER_CHECKPOINT_PATH="/mnt/project_dir/evaluation/checkpoint"
+CONTAINER_DEMO_PATH="/mnt/project_dir/evaluation/demos"
+CONTAINER_LOG_DIR="/mnt/project_dir/evaluation/eval_logs"
+CONTAINER_INNER_SCRIPT_PATH="/mnt/project_dir/leo_docker/container_script_p.sh" # Where it will be mounted
+
+# Evaluation parameters (can be passed as arguments to the inner script)
+TASK_VARIANTS_FOR_EVAL="slide_block_to_color_target"
+EVAL_EPISODES=1 # <<< CRITICAL: Start with 1 for testing
+EVAL_ENVS=4
+HYDRA_OUTPUT_SUBDIR="hydra_run_output" # Used for constructing the success message
+# --- End User Configuration ---
+
+echo "Job started on $(hostname) at $(date)"
+echo "Using Apptainer image: ${IMAGE_PATH}"
+echo "GPU: $CUDA_VISIBLE_DEVICES"
+mkdir -p "${HPC_LOG_DIR}"
+module purge
+module load 2023
+
+# Ensure the inner script is executable by the user running the Slurm job
+if [ ! -f "${HPC_INNER_SCRIPT_PATH}" ]; then
+    echo "ERROR: Inner script ${HPC_INNER_SCRIPT_PATH} not found!"
+    exit 1
+fi
+chmod +x "${HPC_INNER_SCRIPT_PATH}"
+
+
+export APPTAINERENV_QT_QPA_PLATFORM="offscreen"
+export APPTAINERENV_PYOPENGL_PLATFORM="egl"
+export APPTAINERENV_QT_DEBUG_PLUGINS="0"
+export APPTAINERENV_CUDA_LAUNCH_BLOCKING="1"
+
+echo "--- Slurm Script: Launching Apptainer ---"
+
+apptainer exec --nv \
+    --bind "${HPC_CHECKPOINT_PATH}:${CONTAINER_CHECKPOINT_PATH}:ro" \
+    --bind "${HPC_DEMO_PATH}:${CONTAINER_DEMO_PATH}:ro" \
+    --bind "${HPC_LOG_DIR}:${CONTAINER_LOG_DIR}:rw" \
+    --bind "${HPC_INNER_SCRIPT_PATH}:${CONTAINER_INNER_SCRIPT_PATH}:ro" \
+    "${IMAGE_PATH}" \
+    bash "${CONTAINER_INNER_SCRIPT_PATH}" "${TASK_VARIANTS_FOR_EVAL}" "${EVAL_EPISODES}" "${EVAL_ENVS}" # Pass args to inner script
+
+EXEC_EXIT_CODE=$?
+
+if [ ${EXEC_EXIT_CODE} -eq 0 ]; then
+    echo "Evaluation completed successfully."
+    echo "Check Hydra outputs in ${HPC_LOG_DIR}/${HYDRA_OUTPUT_SUBDIR}"
+else
+    echo "ERROR: Evaluation failed with exit code ${EXEC_EXIT_CODE}."
+fi
+
+echo "Job finished at $(date)"
+exit ${EXEC_EXIT_CODE}

@@ -1,0 +1,174 @@
+Bootstrap: docker
+From: nvidia/cuda:11.7.1-cudnn8-devel-ubuntu22.04
+
+%environment
+    export TZ=Europe/Amsterdam
+    export DEBIAN_FRONTEND=noninteractive
+    export TMPDIR=/var/tmp/
+    export COPPELIASIM_ROOT=/opt/coppeliaSim
+    export LD_LIBRARY_PATH=/opt/coppeliaSim:$LD_LIBRARY_PATH # Apptainer prepends to existing LD_LIBRARY_PATH
+    export LIBGL_ALWAYS_SOFTWARE=1
+    # Add the path to the peract submodule
+    export PYTHONPATH=/root/install/RVT:/root/install/RVT/rvt/libs/PyRep:/root/install/RVT/rvt/libs/RLBench:/root/install/RVT/rvt/libs/YARR:/root/install/RVT/rvt/libs/peract_colab:/root/install/RVT/rvt/libs/point-renderer:/root/install/RVT/rvt/libs/peract:$PYTHONPATH
+    #export PYTHONPATH=/root/install/RVT:/root/install/RVT/rvt/libs/PyRep:/root/install/RVT/rvt/libs/RLBench:/root/install/RVT/rvt/libs/YARR:/root/install/RVT/rvt/libs/peract_colab:/root/install/RVT/rvt/libs/point-renderer:$PYTHONPATH
+    #export PYTHONPATH=/root/install/RVT:/root/install/RVT/rvt/libs/PyRep:/root/install/RVT/rvt/libs/RLBench:/root/install/RVT/rvt/libs/YARR:/root/install/RVT/rvt/libs/peract_colab:/root/install/RVT/rvt/libs/point-renderer:/root/install/RVT/rvt/libs/peract:$PYTHONPATH
+    export QT_QPA_PLATFORM_PLUGIN_PATH=$COPPELIASIM_ROOT
+    export FORCE_CUDA=1
+    export TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6"
+
+%post
+    # Set Timezone and DEBIAN_FRONTEND first for non-interactive installs
+    export TZ=Europe/Amsterdam
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    export DEBIAN_FRONTEND=noninteractive
+
+    # --- CRITICAL: Define build-time environment variables here ---
+    export TMPDIR=/var/tmp/
+    export COPPELIASIM_ROOT=/opt/coppeliaSim
+    # LD_LIBRARY_PATH for build if any compiled C/C++ code in pip installs needs it
+    # Python's ctypes find_library uses LD_LIBRARY_PATH.
+    export LD_LIBRARY_PATH=${COPPELIASIM_ROOT}:${LD_LIBRARY_PATH} # Prepend
+    export QT_QPA_PLATFORM_PLUGIN_PATH=${COPPELIASIM_ROOT}
+    export FORCE_CUDA=1 # For PyTorch3D build
+    export TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6" # For PyTorch3D build
+    # LIBGL_ALWAYS_SOFTWARE might also be needed by some build steps if they try to init GL
+    export LIBGL_ALWAYS_SOFTWARE=1
+    # -------------------------------------------------------------
+
+    # Set up temporary directories (from Dockerfile)
+    chmod 1777 /tmp && mkdir -p /var/tmp && chmod 1777 /var/tmp
+
+    # Minimal initial update and install software-properties-common
+    apt-get update
+    apt-get install -y --no-install-recommends software-properties-common gnupg ca-certificates
+
+    # Add PPA and update *immediately after*
+    add-apt-repository ppa:deadsnakes/ppa -y
+    apt-get update # CRITICAL: Update package lists AFTER adding the PPA
+
+    # Now install python3.8 and other dependencies that might rely on it or common tools
+    apt-get install -y --no-install-recommends \
+        curl wget unzip \
+        xvfb xserver-xorg xinit nvidia-settings kmod \
+        libglu1-mesa-dev mesa-utils xterm xauth x11-xkb-utils xfonts-base xkb-data libxtst6 libxv1 \
+        libxkbcommon-x11-0 \
+        build-essential cmake git \
+        python3.8 python3.8-dev python3.8-venv python3-pip
+
+    # Clean apt cache after all apt installs
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+    # Set Python 3.8 as default
+    ln -sf /usr/bin/python3.8 /usr/bin/python
+    ln -sf /usr/bin/python3.8 /usr/bin/python3
+
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.8 100
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 100
+
+    rm -f /usr/bin/pip # remove old symlink if it exists
+    ln -sf /usr/bin/pip3 /usr/bin/pip # This might link to python3-pip's pip3, ensure it uses 3.8's pip
+
+    # Set up Python environment
+    python -m pip install --upgrade "pip<24.1" setuptools
+
+    # Download and install CoppeliaSim
+    # WORKDIR /tmp is implicit for commands unless changed with cd
+    cd /tmp
+    wget -O coppelia_player.tar.xz https://downloads.coppeliarobotics.com/V4_1_0/CoppeliaSim_Player_V4_1_0_Ubuntu20_04.tar.xz && \
+    mkdir -p /opt/coppeliaSim && \
+    tar -xJf coppelia_player.tar.xz -C /opt/coppeliaSim --strip-components=1 && \
+    chmod +x /opt/coppeliaSim/coppeliaSim.sh && \
+    rm coppelia_player.tar.xz
+    # No need to set CoppeliaSim ENV vars here, they are in %environment
+
+    # Clone RVT repo with submodules
+    git clone --recurse-submodules https://github.com/NVlabs/RVT.git /root/install/RVT
+    cd /root/install/RVT && git submodule update --init
+
+    # Install PyTorch with CUDA support
+    python -m pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 \
+    --extra-index-url https://download.pytorch.org/whl/cu117
+
+    # Install additional Python packages
+    python -m pip install yacs omegaconf hydra-core pandas PyYAML
+
+    # Set up environment for PyTorch3D (ENV vars are in %environment)
+    # Install PyTorch3D dependencies and package
+    python -m pip install iopath fvcore
+    python -m pip install --no-index --no-cache-dir pytorch3d \
+    -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py38_cu117_pyt1131/download.html
+
+    # Install RVT and its components
+    cd /root/install/RVT # WORKDIR equivalent
+    # python -m pip install -e '.[xformers]' -> this files with old pytorch version
+    python -m pip install -e . # Adjusted for common failure mode
+
+    # Install required libraries
+    python -m pip install -e rvt/libs/PyRep
+    python -m pip install -e rvt/libs/RLBench
+    python -m pip install -e rvt/libs/YARR
+
+    # ------------------------------------------------------------------
+    # Make the PerAct sub-module importable as a real top-level package.
+    # ------------------------------------------------------------------
+    # <we are still inside /root/install/RVT>
+
+    mkdir -p rvt/libs/peract/peract
+    
+    # First, check if peract directory exists and has the expected structure
+    if [ -d "rvt/libs/peract/peract" ]; then
+        # Create __init__.py if it doesn't exist
+        if [ ! -f "rvt/libs/peract/peract/__init__.py" ]; then
+            cat > rvt/libs/peract/peract/__init__.py << 'EOF'
+# Make peract importable
+import os
+import sys
+from pathlib import Path
+
+# Add the peract directory to Python path
+peract_dir = Path(__file__).parent.resolve()
+if str(peract_dir) not in sys.path:
+    sys.path.insert(0, str(peract_dir))
+EOF
+        fi
+    else
+        echo "Warning: rvt/libs/peract directory not found"
+    fi
+
+    python -m pip uninstall -y packaging setuptools
+    python -m pip install packaging==25.0 setuptools==65.5.0
+
+    python -m pip install -e rvt/libs/peract # ADD Peract 
+    python -m pip install -e rvt/libs/peract_colab
+    python -m pip install -e rvt/libs/point-renderer
+
+    # Replace OpenCV with headless version
+    python -m pip uninstall -y opencv-python
+    python -m pip install opencv-python-headless
+
+    # At the end of %post, add the checks again:
+    echo "Verifying python and python3 versions and hydra-core installation..."
+    echo "python is: $(readlink -f /usr/bin/python)"
+    echo "python3 is: $(readlink -f /usr/bin/python3)"
+    python -c "import sys; print(f'Python version (from python): {sys.version}')"
+    python3 -c "import sys; print(f'Python3 version (from python3): {sys.version}')"
+    python3 -c "import hydra; print(f'Hydra (via python3) successfully imported. Version: {hydra.__version__}')" || echo "ERROR: Hydra import (via python3) FAILED during build"
+    echo "Python3 sys.path (during build):"
+    python3 -c "import sys; print(sys.path)"
+
+    # Run sanity check
+    python -c "print('✅ RVT2 environment successfully built.')"
+
+%runscript
+    # This section defines what happens when you do 'apptainer run <image.sif>'
+    # Your Dockerfile CMD was ["/bin/bash"]
+    echo "RVT2 Container. Use 'apptainer shell <image.sif>' for an interactive shell or 'apptainer exec <image.sif> <command>'."
+    exec /bin/bash "$@"
+
+%labels
+    Author YourName
+    Version 1.0
+
+%help
+    This container includes RVT2 and its dependencies with CoppeliaSim.
+    Built from nvidia/cuda:11.7.1-cudnn8-devel-ubuntu22.04.

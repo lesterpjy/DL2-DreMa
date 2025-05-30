@@ -1,0 +1,35 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100
+#SBATCH --output=work/leo_val_output_%A.out
+#SBATCH --time=00:10:00
+#SBATCH --ntasks=1
+#SBATCH --mem=64GB
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=9
+
+# set up paths & overrides
+export HYDRA_OVERRIDE_RLBENCH_TASKS="[slide_block_to_color_target]"
+
+export PORT=29567
+export LOG_DIR=$(pwd)/outputs/logs
+# export DEMO=/home/scur2683/dream-team/data_onetask/mixed/val/slide_block_to_color_target/all_variations/episodes
+export DEMO="/scratch-shared/tmp.lUdVGE8VOd/rlbench_moved/val"
+export REPLAY=$(pwd)/tmp_all/$PORT
+
+
+LOCAL_EVAL_PY="/gpfs/home4/scur2683/dream-team/peract/eval.py"
+
+module load 2022
+module spider CUDA/11.7.0
+module spider cuDNN/8.4.1.50-CUDA-11.7.0
+
+# ensure helper scripts are runnable
+chmod +x snellius_env/env_setup.sh snellius_env/run_validation.sh
+
+# launch inside container (direct entrypoint, no nested shell)
+singularity exec --nv \
+  --bind "$(pwd)":/dream-team \
+  --bind "/scratch-shared/tmp.lUdVGE8VOd/rlbench":"/scratch-shared/tmp.lUdVGE8VOd/rlbench" \
+  --bind "$LOCAL_EVAL_PY:/root/install/peract/eval.py" \
+  ./peract_jammy_please_work.sif \
+    /dream-team/snellius_env/run_validation.sh
