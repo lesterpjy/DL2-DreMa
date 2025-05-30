@@ -1,0 +1,34 @@
+#!/bin/bash
+#SBATCH --job-name=peract_eval
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=9
+#SBATCH --time=02:00:00
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --output=work/build_peract_jammy_%A.out
+
+module purge
+module load 2023
+
+# set up a big-enough tmpdir under /tmp
+export APPTAINER_TMPDIR=$(mktemp -d /tmp/scur2683XXXXXX)
+export SINGULARITY_TMPDIR=$APPTAINER_TMPDIR
+
+# drop any old image
+rm -f peract_jammy.sif
+
+echo "*** HOST: current working directory ***"
+pwd
+echo "*** HOST: listing build-context (/home/scur2683/dream-team) ***"
+ls -l /home/scur2683/dream-team
+
+
+echo "*** HOST(after cd): pwd & listing ***"
+pwd
+ls -l
+
+echo "=== Now invoking apptainer build ==="
+apptainer build --fakeroot --tmpdir $SINGULARITY_TMPDIR peract_jammy.sif peract_jammy.def
+
+echo "✅ peract_jammy.sif ready (Ubuntu 22.04 + PerAct)"

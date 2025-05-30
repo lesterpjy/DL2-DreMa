@@ -1,0 +1,183 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --output=work/diffuser_dataprep_merged_%A.out
+#SBATCH --time=00:30:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+
+module purge
+module load 2023
+
+echo "=== Slurm Job: Starting 3D Diffuser Actor Data Preparation (Merged Script) ==="
+PROJECT_ROOT_ON_HOST=$(pwd) # e.g., /gpfs/home4/scur2683/dream-team
+CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy_cop4_7.sif"
+
+# --- Host paths for data ---
+# These will be exported and accessible inside the container via /scratch-shared bind mount
+export HOST_RAW_RLBENCH_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/rlbench"
+export HOST_OUTPUT_RAW_HIGHRES_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_raw_highres_tasks"
+export HOST_OUTPUT_PACKAGED_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_packaged_tasks"
+
+# --- Task configuration ---
+export TASKS_TO_PROCESS="place_shape_in_shape_sorter" # space-separated string
+
+# --- Path to the known-good TTT file on the host ---
+HOST_GOOD_TTT_FILE="/scratch-shared/tmp.lUdVGE8VOd/good_rlbench_assets/task_design.ttt"
+CONTAINER_MOUNTED_GOOD_TTT_FILE="/good_assets_host/task_design.ttt"
+
+if [ ! -f "${HOST_GOOD_TTT_FILE}" ]; then
+    echo "ERROR: Known-good TTT file not found at ${HOST_GOOD_TTT_FILE} on the HOST"
+    exit 1
+else
+    echo "INFO: Found known-good TTT file at ${HOST_GOOD_TTT_FILE} on the HOST. It will be mounted at ${CONTAINER_MOUNTED_GOOD_TTT_FILE}."
+fi
+
+echo "Host Project Root: ${PROJECT_ROOT_ON_HOST}"
+echo "Container Image: ${CONTAINER_IMAGE_PATH}"
+echo "Host Raw RLBench Data Root: ${HOST_RAW_RLBENCH_DATA_ROOT}"
+echo "Host Output Raw Highres Root: ${HOST_OUTPUT_RAW_HIGHRES_ROOT}"
+echo "Host Output Packaged Root: ${HOST_OUTPUT_PACKAGED_ROOT}"
+echo "Tasks to process: ${TASKS_TO_PROCESS}"
+
+# --- Ensure host output directories exist ---
+# These directories are on the host, accessed via /scratch-shared inside the container
+mkdir -p "${HOST_OUTPUT_RAW_HIGHRES_ROOT}/train" "${HOST_OUTPUT_RAW_HIGHRES_ROOT}/val"
+mkdir -p "${HOST_OUTPUT_PACKAGED_ROOT}/train" "${HOST_OUTPUT_PACKAGED_ROOT}/val"
+echo "Host output directories ensured."
+
+
+singularity exec --nv \
+  --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
+  --bind "/scratch-shared/tmp.lUdVGE8VOd":/scratch-shared/tmp.lUdVGE8VOd \
+  --bind "${HOST_GOOD_TTT_FILE}":"${CONTAINER_MOUNTED_GOOD_TTT_FILE}":ro \
+  "${CONTAINER_IMAGE_PATH}" \
+  /bin/bash -c ' # Start of the inlined script block
+    set -e # Exit on error within this script block
+    echo "--- Inside Apptainer Container for Data Preparation ---"
+
+    # --- Python Environment Verification (similar to training script) ---
+    echo "Current user: $(whoami)"
+    echo "--- Verifying Python Environment ---"
+    echo "Initial PATH: $PATH"
+    if [ -f /opt/diffuser_venv/bin/activate ]; then
+        echo "Sourcing /opt/diffuser_venv/bin/activate..."
+        source /opt/diffuser_venv/bin/activate
+        echo "PATH after manual source: $PATH"
+    else
+        echo "WARNING: /opt/diffuser_venv/bin/activate not found!"
+    fi
+    echo "which python: $(which python || echo "which python command failed")"
+    echo "python --version: $(python --version || echo "python --version command failed")"
+    echo "pip --version: $(pip --version || echo "pip --version command failed")"
+    echo "--- End Python Environment Verification ---"
+
+    # --- TTT File Setup (similar to training script) ---
+    echo "--- Checking existence of TTT file from shell BEFORE setting ENV var ---";
+    ls -l "'"${CONTAINER_MOUNTED_GOOD_TTT_FILE}"'" || echo "WARNING: ls -l failed for ${CONTAINER_MOUNTED_GOOD_TTT_FILE}";
+
+    export RLBENCH_OVERRIDE_TTT_FILE_PATH="'"${CONTAINER_MOUNTED_GOOD_TTT_FILE}"'";
+    echo "RLBENCH_OVERRIDE_TTT_FILE_PATH set to: ${RLBENCH_OVERRIDE_TTT_FILE_PATH}";
+    echo "--- Checking existence of TTT file from shell AFTER setting ENV var (should be same) ---";
+    ls -l "${RLBENCH_OVERRIDE_TTT_FILE_PATH}" || echo "WARNING: ls -l failed for ${RLBENCH_OVERRIDE_TTT_FILE_PATH}";
+
+    # --- General Environment Setup for Data Prep (from exec_dataprep_inside_container.sh) ---
+    echo "--- Setting up Data Preparation Environment ---"
+    export XDG_RUNTIME_DIR="/tmp/xdg_runtime_$(whoami)_$$"
+    mkdir -p "$XDG_RUNTIME_DIR"
+    chmod 0700 "$XDG_RUNTIME_DIR"
+    echo "XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR}"
+
+    export COPPELIASIM_ROOT=/opt/coppeliaSim
+    echo "COPPELIASIM_ROOT: ${COPPELIASIM_ROOT}"
+    export LD_LIBRARY_PATH="${COPPELIASIM_ROOT}:${COPPELIASIM_ROOT}/platforms:${LD_LIBRARY_PATH}"
+    echo "LD_LIBRARY_PATH updated to: ${LD_LIBRARY_PATH}"
+    export QT_QPA_PLATFORM_PLUGIN_PATH="${COPPELIASIM_ROOT}/platforms"
+    echo "QT_QPA_PLATFORM_PLUGIN_PATH: ${QT_QPA_PLATFORM_PLUGIN_PATH}"
+    export QT_QPA_PLATFORM="offscreen" # For headless operation
+    echo "QT_QPA_PLATFORM: ${QT_QPA_PLATFORM}"
+    export PYOPENGL_PLATFORM="egl" # For headless OpenGL
+    echo "PYOPENGL_PLATFORM: ${PYOPENGL_PLATFORM}"
+    # export LIBGL_ALWAYS_SOFTWARE="1" # If EGL/GPU issues persist, this can be a fallback
+    export QT_DEBUG_PLUGINS=1
+    
+    export PYTHONIOENCODING=utf-8
+    export PYTHONPATH=/dream-team/3d_diffuser_actor:/root/install/PyRep:/root/install/RLBench:${PYTHONPATH}
+    echo "PYTHONPATH updated to: $PYTHONPATH"
+
+    echo "Clearing any previous CoppeliaSim user settings..."
+    rm -rf /root/.config/CoppeliaSim || true
+    rm -rf /root/.CoppeliaSim     || true
+    echo "User settings cleared."
+
+    echo "Listing /dream-team:"
+    ls -l /dream-team
+    cd /dream-team/3d_diffuser_actor
+    echo "Current PWD: $(pwd)"
+
+    # Define Python script paths (relative to /dream-team/3d_diffuser_actor)
+    PYTHON_EXEC_RERENDER="./data_preprocessing/rerender_highres_rlbench.py"
+    PYTHON_EXEC_REARRANGE="./data_preprocessing/rearrange_rlbench_demos.py"
+    PYTHON_EXEC_PACKAGE="./data_preprocessing/package_rlbench.py"
+
+    # --- Loop through TRAIN and VAL splits ---
+    for CURRENT_SPLIT in "train" "val"; do
+        echo ""
+        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+        echo "--- Starting Data Processing for SPLIT: ${CURRENT_SPLIT} ---"
+        echo "Host vars available: HOST_RAW_RLBENCH_DATA_ROOT=${HOST_RAW_RLBENCH_DATA_ROOT}, TASKS_TO_PROCESS=${TASKS_TO_PROCESS}"
+        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+
+        # Define paths for the current split using HOST variables (exported from Slurm script)
+        # These HOST_... variables are directly available here due to being exported.
+        DEMO_ROOT_FOR_RERENDER="${HOST_RAW_RLBENCH_DATA_ROOT}/${CURRENT_SPLIT}"
+        RAW_HIGHRES_SAVE_PATH="${HOST_OUTPUT_RAW_HIGHRES_ROOT}/${CURRENT_SPLIT}"
+        PACKAGED_SAVE_PATH="${HOST_OUTPUT_PACKAGED_ROOT}/${CURRENT_SPLIT}"
+
+        echo "Using DEMO_ROOT_FOR_RERENDER: ${DEMO_ROOT_FOR_RERENDER}"
+        echo "Using RAW_HIGHRES_SAVE_PATH: ${RAW_HIGHRES_SAVE_PATH}"
+        echo "Using PACKAGED_SAVE_PATH: ${PACKAGED_SAVE_PATH}"
+
+        # === Step 1: Re-render ===
+        echo "--- Step 1: Re-rendering for ${CURRENT_SPLIT} ---"
+        # TASKS_TO_PROCESS is an environment variable exported from the host script
+        for task_name in ${TASKS_TO_PROCESS}; do # Note: if TASKS_TO_PROCESS has spaces, this iterates correctly
+            echo "Re-rendering task: ${task_name} for split: ${CURRENT_SPLIT}"
+            # Ensure xvfb-run is used if the script requires a display, even if offscreen
+            # rerender_highres_rlbench.py likely uses PyRep which needs an X server context
+             python3 ${PYTHON_EXEC_RERENDER} \
+                --tasks="${task_name}" \
+                --save_path="${RAW_HIGHRES_SAVE_PATH}" \
+                --demo_path="${DEMO_ROOT_FOR_RERENDER}" \
+                --image_size=256,256 \
+                --renderer=opengl \
+                --processes=1 \
+                --all_variations=True # Assuming this means all variations within a task demo
+        done
+
+        # === Step 2: Rearranging directories ===
+        echo "--- Step 2: Rearranging directories for ${CURRENT_SPLIT} ---"
+        # This script might also need xvfb if it instantiates RLBench/PyRep environment
+        python3 ${PYTHON_EXEC_REARRANGE} --root_dir "${RAW_HIGHRES_SAVE_PATH}"
+
+        # === Step 3: Packaging episodes ===
+        echo "--- Step 3: Packaging episodes for ${CURRENT_SPLIT} ---"
+        for task_name in ${TASKS_TO_PROCESS}; do
+            echo "Packaging task: ${task_name} for split: ${CURRENT_SPLIT}"
+            # This script might also need xvfb
+            python3 ${PYTHON_EXEC_PACKAGE} \
+                --data_dir="${RAW_HIGHRES_SAVE_PATH}" \
+                --tasks="${task_name}" \
+                --output="${PACKAGED_SAVE_PATH}" \
+                --store_intermediate_actions=1 \
+                --cameras left_shoulder right_shoulder wrist front
+        done
+        echo "--- Data Processing for SPLIT: ${CURRENT_SPLIT} finished successfully ---"
+    done # End of loop for TRAIN/VAL splits
+
+    echo "--- All Data Preparation Tasks in Container Finished ---"
+' # End of the inlined script block
+
+EXIT_CODE=$?
+echo "=== Slurm Job: 3D Diffuser Actor Data Preparation Finished with exit code $EXIT_CODE ==="
+exit $EXIT_CODE

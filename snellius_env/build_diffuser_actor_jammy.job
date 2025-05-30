@@ -1,0 +1,42 @@
+#!/bin/bash
+#SBATCH -p  cbuild
+#SBATCH -t 00:20:00 # Increase time if needed, installs can be slow
+#SBATCH --job-name=build_diffuser_actor
+#SBATCH --output=work/build_diffuser_actor_jammy_%A.out
+
+module purge
+module load 2023
+
+export APPTAINER_TMPDIR=$(mktemp -d /tmp/$(whoami)XXXXXX)
+export SINGULARITY_TMPDIR=$APPTAINER_TMPDIR
+echo "Using TMPDIR: ${APPTAINER_TMPDIR}"
+
+DEFINITION_FILE="diffuser_actor_jammy.def"
+SIF_FILE="diffuser_actor_jammy.sif"
+
+# Drop any old image
+rm -f "${SIF_FILE}"
+
+echo "*** HOST: current working directory ***"
+pwd
+ls -l
+
+if [ ! -f CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz ]; then
+    echo "ERROR: CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz not found in $(pwd)"
+    exit 1
+fi
+
+echo "=== Now invoking apptainer build ==="
+apptainer build --fakeroot --tmpdir "${SINGULARITY_TMPDIR}" "${SIF_FILE}" "${DEFINITION_FILE}"
+
+BUILD_EXIT_CODE=$?
+
+if [ $BUILD_EXIT_CODE -eq 0 ]; then
+    echo "✅ ${SIF_FILE} ready (Ubuntu 22.04 + 3D Diffuser Actor)"
+else
+    echo "❌ Build failed with exit code ${BUILD_EXIT_CODE}"
+fi
+
+rm -rf "${APPTAINER_TMPDIR}"
+
+exit $BUILD_EXIT_CODE

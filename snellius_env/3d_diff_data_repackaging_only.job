@@ -1,0 +1,193 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1              # Needed for package_rlbench.py as it launches RLBenchEnv
+#SBATCH --output=work/diffuser_dataprep_repack_only_%A.out
+#SBATCH --time=10:00:00      # Increased time for processing all tasks, adjust as needed
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=9   # As per your original script
+
+module purge
+module load 2023
+
+echo "=== Slurm Job: Starting RLBench Data REARRANGE & PACKAGING (All Tasks) ==="
+PROJECT_ROOT_ON_HOST=$(pwd)
+# This should be your SIF with CoppeliaSim 4.7 and PyRep 4.1.0.3 (your fork)
+CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif"
+
+# --- Host paths for data ---
+# HOST_INPUT_FOR_REPACKAGE_ROOT is where the "raw highres" data (input for rearrange/package) is located.
+# export HOST_INPUT_FOR_REPACKAGE_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_raw_highres_tasks"
+# If your "one task" test data was in a different location and you want to use that, adjust this path:
+export HOST_INPUT_FOR_REPACKAGE_ROOT="/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask"
+
+export HOST_OUTPUT_PACKAGED_ROOT="/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask_repackaged"
+
+# --- Task configuration ---
+# All tasks from your earlier script
+# export TASKS_TO_PROCESS="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"
+export TASKS_TO_PROCESS="slide_block_to_color_target"
+
+# --- Path to the known-good TTT file on the host ---
+HOST_GOOD_TTT_FILE="/scratch-shared/tmp.lUdVGE8VOd/good_rlbench_assets/task_design.ttt"
+CONTAINER_MOUNTED_GOOD_TTT_FILE="/good_assets_host/task_design.ttt"
+
+if [ ! -d "${HOST_INPUT_FOR_REPACKAGE_ROOT}" ]; then
+    echo "ERROR: Input data directory HOST_INPUT_FOR_REPACKAGE_ROOT (${HOST_INPUT_FOR_REPACKAGE_ROOT}) not found!"
+    echo "This script assumes data for rearranging/packaging already exists there."
+    exit 1
+fi
+
+if [ ! -f "${HOST_GOOD_TTT_FILE}" ]; then
+    echo "ERROR: Known-good TTT file not found at ${HOST_GOOD_TTT_FILE} on the HOST. This is required for packaging."
+    exit 1
+fi
+echo "INFO: Found known-good TTT file at ${HOST_GOOD_TTT_FILE} on the HOST. It will be mounted at ${CONTAINER_MOUNTED_GOOD_TTT_FILE}."
+
+echo "Host Project Root: ${PROJECT_ROOT_ON_HOST}"
+echo "Container Image: ${CONTAINER_IMAGE_PATH}"
+echo "Host Input for Repackaging: ${HOST_INPUT_FOR_REPACKAGE_ROOT}"
+echo "Host Output Packaged Root: ${HOST_OUTPUT_PACKAGED_ROOT}"
+echo "Tasks to process: (all listed)"
+
+# --- Ensure host output directories exist ---
+mkdir -p "${HOST_OUTPUT_PACKAGED_ROOT}/train" "${HOST_OUTPUT_PACKAGED_ROOT}/val" "${HOST_OUTPUT_PACKAGED_ROOT}/test"
+echo "Host output directories for packaged data ensured."
+
+# This variable from the Slurm script (outer shell) will be used to set the env var inside the container script
+TTT_PATH_FOR_ENV_VAR_INSIDE_CONTAINER="${CONTAINER_MOUNTED_GOOD_TTT_FILE}"
+
+singularity exec --nv \
+  --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
+  --bind "/scratch-shared/tmp.lUdVGE8VOd":/scratch-shared/tmp.lUdVGE8VOd \
+  --bind "${HOST_GOOD_TTT_FILE}":"${CONTAINER_MOUNTED_GOOD_TTT_FILE}":ro \
+  "${CONTAINER_IMAGE_PATH}" \
+  /bin/bash -c '
+    # Start of the inlined script block
+    set -e 
+    echo "--- Inside Apptainer Container for Data Repackaging ---"
+
+    # Correctly inject the TTT path for use in this script
+    INNER_SCRIPT_ACTUAL_TTT_PATH="'"${TTT_PATH_FOR_ENV_VAR_INSIDE_CONTAINER}"'"
+
+    # --- Python Environment Verification ---
+    echo "Current user: $(whoami)"
+    echo "--- Verifying Python Environment ---"
+    echo "Initial PATH: $PATH"
+    if [ -f /opt/diffuser_venv/bin/activate ]; then
+        echo "Sourcing /opt/diffuser_venv/bin/activate..."
+        source /opt/diffuser_venv/bin/activate
+        echo "PATH after manual source: $PATH"
+    else
+        echo "WARNING: /opt/diffuser_venv/bin/activate not found!"
+    fi
+    echo "which python: $(/usr/bin/which python || echo "which python command failed")"
+    echo "python --version: $(python --version || echo "python --version command failed")"
+    echo "pip --version: $(pip --version || echo "pip --version command failed")"
+    echo "--- End Python Environment Verification ---"
+
+    # --- TTT File Setup (CRITICAL for package_rlbench.py) ---
+    echo "--- Setting RLBENCH_OVERRIDE_TTT_FILE_PATH ---"
+    echo "Value of INNER_SCRIPT_ACTUAL_TTT_PATH to be used: ${INNER_SCRIPT_ACTUAL_TTT_PATH}"
+    ls -l "${INNER_SCRIPT_ACTUAL_TTT_PATH}" || echo "WARNING: ls -l failed for TTT file at ${INNER_SCRIPT_ACTUAL_TTT_PATH}"
+    
+    export RLBENCH_OVERRIDE_TTT_FILE_PATH="${INNER_SCRIPT_ACTUAL_TTT_PATH}" # Path for PyRep/RLBench
+    echo "RLBENCH_OVERRIDE_TTT_FILE_PATH set to: ${RLBENCH_OVERRIDE_TTT_FILE_PATH}"
+    
+    # Verify from Python'"'"'s perspective
+    python3 -c "import os; path_val = os.environ.get('\''RLBENCH_OVERRIDE_TTT_FILE_PATH'\''); print('\''Python sees RLBENCH_OVERRIDE_TTT_FILE_PATH as: |'\'' + str(path_val) + '\''|'\'')"
+
+    # --- General Environment Setup for Data Prep (needed for package_rlbench.py) ---
+    echo "--- Setting up Data Preparation Environment for RLBench ---"
+    export XDG_RUNTIME_DIR="/tmp/xdg_runtime_$(whoami)_$$"
+    mkdir -p "$XDG_RUNTIME_DIR"
+    chmod 0700 "$XDG_RUNTIME_DIR"
+    echo "XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR}"
+
+    export COPPELIASIM_ROOT=/opt/coppeliaSim
+    echo "COPPELIASIM_ROOT: ${COPPELIASIM_ROOT}"
+    export LD_LIBRARY_PATH="${COPPELIASIM_ROOT}:${COPPELIASIM_ROOT}/platforms:${LD_LIBRARY_PATH}"
+    echo "LD_LIBRARY_PATH updated to: ${LD_LIBRARY_PATH}"
+    export QT_QPA_PLATFORM_PLUGIN_PATH="${COPPELIASIM_ROOT}/platforms"
+    echo "QT_QPA_PLATFORM_PLUGIN_PATH: ${QT_QPA_PLATFORM_PLUGIN_PATH}"
+    export QT_QPA_PLATFORM="offscreen"
+    echo "QT_QPA_PLATFORM: ${QT_QPA_PLATFORM}"
+    export PYOPENGL_PLATFORM="egl"
+    echo "PYOPENGL_PLATFORM: ${PYOPENGL_PLATFORM}"
+    export QT_DEBUG_PLUGINS=0 # Set to 0 unless debugging Qt plugin issues specifically
+    
+    export PYTHONIOENCODING=utf-8
+    export PYTHONPATH=/dream-team/3d_diffuser_actor:/root/install/PyRep:/root/install/RLBench:${PYTHONPATH}
+    echo "PYTHONPATH current: $PYTHONPATH"
+
+    echo "Clearing any previous CoppeliaSim user settings..."
+    rm -rf /root/.config/CoppeliaSim /root/.CoppeliaSim /home/$(whoami)/.config/CoppeliaSim /home/$(whoami)/.CoppeliaSim || true
+    echo "User settings cleared."
+
+    cd /dream-team/3d_diffuser_actor # Python scripts are expected to be here
+    echo "Current PWD: $(pwd)"
+
+    PYTHON_EXEC_REARRANGE="./data_preprocessing/rearrange_rlbench_demos.py"
+    PYTHON_EXEC_PACKAGE="./data_preprocessing/package_rlbench.py"
+
+    # --- Loop through TRAIN, VAL, TEST splits ---
+    for CURRENT_SPLIT in "val"; do
+        echo ""
+        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+        echo "--- Starting Data REARRANGE & PACKAGING for SPLIT: ${CURRENT_SPLIT} ---"
+        echo "Host vars: HOST_INPUT_FOR_REPACKAGE_ROOT=${HOST_INPUT_FOR_REPACKAGE_ROOT}"
+        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+
+        INPUT_DATA_PATH_FOR_SPLIT="${HOST_INPUT_FOR_REPACKAGE_ROOT}/${CURRENT_SPLIT}"
+        PACKAGED_SAVE_PATH_FOR_SPLIT="${HOST_OUTPUT_PACKAGED_ROOT}/${CURRENT_SPLIT}"
+
+        echo "Using INPUT_DATA_PATH (for rearrange and package): ${INPUT_DATA_PATH_FOR_SPLIT}"
+        echo "Using PACKAGED_SAVE_PATH (output of package): ${PACKAGED_SAVE_PATH_FOR_SPLIT}"
+
+        if [ ! -d "${INPUT_DATA_PATH_FOR_SPLIT}" ]; then
+            echo "WARNING: Input data path ${INPUT_DATA_PATH_FOR_SPLIT} does not exist for split ${CURRENT_SPLIT}. Skipping this split."
+            continue
+        fi
+
+        # === Step 2: Rearranging directories ===
+        echo "--- Step 2: Rearranging directories for ${CURRENT_SPLIT} ---"
+        # This script likely doesn'"'"'t launch RLBench, so direct python call is fine.
+        # It iterates through tasks found in INPUT_DATA_PATH_FOR_SPLIT.
+        python3 ${PYTHON_EXEC_REARRANGE} --root_dir "${INPUT_DATA_PATH_FOR_SPLIT}"
+
+        # === Step 3: Packaging episodes ===
+        echo "--- Step 3: Packaging episodes for ${CURRENT_SPLIT} ---"
+        # The TASKS_TO_PROCESS variable is exported from the host Slurm script.
+        # Loop through tasks defined in TASKS_TO_PROCESS for packaging.
+        # The rearrange script structures data by task, so package script needs task names.
+        (
+          IFS=" " 
+          for task_name in ${TASKS_TO_PROCESS}; do
+              # Check if the task directory exists after rearrangement
+              TASK_SPECIFIC_INPUT_PATH="${INPUT_DATA_PATH_FOR_SPLIT}/${task_name}"
+              if [ ! -d "${TASK_SPECIFIC_INPUT_PATH}" ]; then
+                  echo "WARNING: Task directory ${TASK_SPECIFIC_INPUT_PATH} not found for packaging. Skipping task ${task_name} for split ${CURRENT_SPLIT}."
+                  continue
+              fi
+              echo "Packaging task: ${task_name} for split: ${CURRENT_SPLIT}"
+              python3 ${PYTHON_EXEC_PACKAGE} \
+                  --data_dir="${INPUT_DATA_PATH_FOR_SPLIT}" \
+                  --tasks="${task_name}" \
+                  --output="${PACKAGED_SAVE_PATH_FOR_SPLIT}" \
+                  --store_intermediate_actions=${store_intermediate_actions:-1} \
+                  --image_size="256,256" \
+                  --cameras left_shoulder right_shoulder wrist front
+          done
+        )
+        echo "--- Data Processing for SPLIT: ${CURRENT_SPLIT} finished successfully ---"
+    done # End of loop for TRAIN/VAL/TEST splits
+
+    echo "--- All Data Repackaging Tasks in Container Finished ---"
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
+        echo "Cleaning up XDG_RUNTIME_DIR: $XDG_RUNTIME_DIR"
+        rm -rf "$XDG_RUNTIME_DIR"
+    fi
+' # End of the inlined script block
+
+EXIT_CODE=$?
+echo "=== Slurm Job: 3D Diffuser Actor Data Repackaging Finished with exit code $EXIT_CODE ==="
+exit $EXIT_CODE

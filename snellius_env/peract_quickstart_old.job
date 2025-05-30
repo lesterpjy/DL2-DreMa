@@ -1,0 +1,108 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100          # Partition name
+#SBATCH --gres=gpu:1                  # Number of GPUs to allocate
+#SBATCH --cpus-per-task=10            # Number of CPU cores per task
+#SBATCH --job-name=peract_quickstart  # Job name
+#SBATCH --ntasks=1                    # Number of tasks
+#SBATCH --time=04:00:00               # Time limit hh:mm:ss
+#SBATCH --mem=64GB                    # Memory pool for all cores
+#SBATCH --output=work/peract_quickstart_%A.out  # Standard output
+
+### --- MODULE SETUP / ENVIRONMENT ---
+module purge
+module load 2023
+# Uncomment if your cluster requires Apptainer module
+# module load Apptainer/<VERSION>
+
+### --- PREPARE DIRECTORIES ---
+echo "Setting up directory structure..."
+mkdir -p data/val data/ckpts work outputs/logs runtime_dir
+
+# Create a specific XDG_RUNTIME_DIR (like in the example)
+export XDG_RUNTIME_DIR=$(pwd)/runtime_dir
+
+### --- CREATE PYREP REBUILD SCRIPT ---
+cat > work/rebuild_pyrep.sh << 'EOF'
+#!/bin/bash
+# Setup environment
+export COPPELIASIM_ROOT=/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04
+export LD_LIBRARY_PATH=$COPPELIASIM_ROOT:$LD_LIBRARY_PATH
+export QT_QPA_PLATFORM=offscreen
+export PYTHONPATH=/PyRep:/RLBench:/YARR:/peract_docker:$PYTHONPATH
+
+echo "Rebuilding PyRep CFFI bindings..."
+cd /PyRep
+pip install -e .
+
+# Create a test script to check the installation
+cat > /tmp/test_pyrep.py << 'PYEOF'
+import os
+import sys
+try:
+    import pyrep
+    print("PyRep successfully imported!")
+    from pyrep.backend import sim
+    print("PyRep backend imported successfully!")
+except Exception as e:
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+
+# Test if PyRep works
+python /tmp/test_pyrep.py
+
+# Create a wrapper script to use correct paths in the original training job
+cat > /tmp/pyrep_wrapper.sh << 'PYEOF'
+#!/bin/bash
+# Set environment variables for PyRep and CoppeliaSim
+export COPPELIASIM_ROOT=/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04
+export LD_LIBRARY_PATH=$COPPELIASIM_ROOT:$LD_LIBRARY_PATH
+export QT_QPA_PLATFORM=offscreen
+export PYTHONPATH=/PyRep:/RLBench:/YARR:/peract_docker:$PYTHONPATH
+
+# Run the command with xvfb
+xvfb-run -a "$@"
+PYEOF
+
+chmod +x /tmp/pyrep_wrapper.sh
+echo "PyRep rebuild completed"
+EOF
+
+chmod +x work/rebuild_pyrep.sh
+
+### --- CREATE QUICKSTART SLURM JOB ---
+echo "Starting PerAct quickstart..."
+
+# Step 2: Rebuild PyRep
+echo "Step 2: Rebuilding PyRep CFFI bindings..."
+srun singularity exec --nv \
+    --bind $(pwd)/data:/peract_docker/data \
+    --bind $(pwd)/work:/peract_docker/work \
+    --bind $(pwd)/outputs:/peract_docker/outputs \
+    --bind $(pwd)/runtime_dir:/tmp \
+    ./peract-latest.sif \
+    bash /peract_docker/work/rebuild_pyrep.sh
+
+# Step 3: Try to run simplified evaluation using train.py instead (following the working example)
+echo "Step: 3: Running minimal train with eval option..."
+srun singularity exec --nv \
+    --bind $(pwd)/data:/peract_docker/data \
+    --bind $(pwd)/work:/peract_docker/work \
+    --bind $(pwd)/outputs:/peract_docker/outputs \
+    --bind $(pwd)/runtime_dir:/tmp \
+    ./peract-latest.sif \
+    /tmp/pyrep_wrapper.sh python3 /peract_docker/train.py \
+    method=PERACT_BC \
+    rlbench.tasks=[open_drawer] \
+    rlbench.task_name='multi' \
+    rlbench.demo_path=/peract_docker/data/ckpts \
+    framework.gpu=0 \
+    framework.logdir=/peract_docker/data/ckpts/ \
+    framework.start_seed=0 \
+    framework.training_iterations=1 \
+    framework.eval_episodes=2 \
+    framework.csv_logging=True \
+    framework.tensorboard_logging=True \
+    rlbench.headless=True
+
+echo "PerAct quickstart completed!"

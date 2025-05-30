@@ -1,0 +1,227 @@
+Bootstrap: docker
+From: nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu22.04
+
+%labels
+    Version 1.2
+    Description Container for 3D Diffuser Actor with RLBench (PerAct fork), PyRep, and dependencies.
+
+%files
+    CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz /root/install/
+
+%post
+    set -eux
+
+    # --- basic Setup ---
+    chmod 1777 /tmp
+    mkdir -p /var/tmp && chmod 1777 /var/tmp
+    export TMPDIR=/var/tmp/
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+
+    # --- NVIDIA Stubs ---
+    apt-get install -y --no-install-recommends \
+        nvidia-utils-515 \
+        libnvidia-compute-515 \
+        libnvidia-gl-515
+
+    # --- base System Dependencies (Part 1 - Before PPA) ---
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        git \
+        curl \
+        wget \
+        unzip \
+        ca-certificates \
+        gnupg \
+        software-properties-common \
+        cuda-command-line-tools-11-7
+
+    # --- add Deadsnakes PPA for Python 3.8 ---
+    add-apt-repository ppa:deadsnakes/ppa -y
+    apt-get update # IMPORTANT: Update *after* adding the PPA
+
+    # --- System Dependencies ---
+    # THIS IS THE CORRECTED COMMAND with packages listed
+    apt-get install -y --no-install-recommends \
+        python3.8 \
+        python3.8-dev \
+        python3.8-venv \
+        python3-pip \
+        libffi-dev \
+        pkg-config \
+        ninja-build \
+        libfontconfig1 \
+	libsodium23 \
+        libglu1-mesa-dev \
+        libgl1-mesa-glx \
+        libglew-dev \
+        libosmesa6-dev \
+        libxrender1 \
+        libsm6 \
+        libxext6 \
+        libxi-dev \
+        libxinerama-dev \
+        libxcursor-dev \
+        libxcb1 \
+        libx11-xcb1 \
+        xvfb
+
+    rm -rf /var/lib/apt/lists/*
+
+    # --- setup Python ---
+    ln -sf /usr/bin/python3.8 /usr/bin/python3
+    # Install pip for Python 3.8 using the correct bootstrap script
+    echo "Downloading pip bootstrap script for Python 3.8..."
+    curl https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get-pip.py # <-- CORRECTED URL
+    echo "Installing pip for Python 3.8..."
+    python3.8 get-pip.py # Use python3.8 explicitly
+    rm get-pip.py
+    echo "Verifying pip version..."
+    pip --version # Should show it's for Python 3.8
+
+    # find the actual pip path (usually /usr/local/bin/pip or /usr/local/bin/pip3.8)
+    PIP_PATH=$(which pip) 
+    if [ -z "$PIP_PATH" ]; then
+        echo "ERROR: pip command not found after installation!"
+        exit 1
+    fi
+    echo "Found pip at ${PIP_PATH}. Creating symlinks..."
+    ln -sf "${PIP_PATH}" /usr/bin/pip  
+    ln -sf "${PIP_PATH}" /usr/bin/pip3 
+
+    echo "Creating Python 3.8 venv..."
+    python3 -m venv /opt/diffuser_venv
+    . /opt/diffuser_venv/bin/activate
+    echo "Upgrading pip inside venv..."
+    python3 -m pip install --upgrade "pip<24.1" # Upgrade pip inside venv
+
+    # --- install CoppeliaSim ---
+    echo "--- Starting CoppeliaSim Installation ---"
+    # Ensure the target directory for CoppeliaSim exists and is writable by root (which %post runs as)
+    mkdir -p /opt/coppeliaSim 
+    if [ ! -d "/opt/coppeliaSim" ]; then
+        echo "CRITICAL ERROR: Failed to create /opt/coppeliaSim directory."
+        exit 1
+    fi
+    echo "Target directory /opt/coppeliaSim created or already exists."
+
+    # Ensure the source tarball exists (copied by %files)
+    if [ ! -f "/root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz" ]; then
+        echo "CRITICAL ERROR: CoppeliaSim tarball not found at /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz"
+        exit 1
+    fi
+    echo "CoppeliaSim tarball found at /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz"
+
+    echo "Extracting CoppeliaSim to /opt/coppeliaSim..."
+    tar -xJf /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz \
+        -C /opt/coppeliaSim --strip-components=1
+
+    # verify extraction
+    echo "Verifying key CoppeliaSim files post-extraction in /opt/coppeliaSim:"
+    ls -l /opt/coppeliaSim
+    if [ ! -f "/opt/coppeliaSim/coppeliaSim.sh" ] && [ ! -f "/opt/coppeliaSim/coppeliaSim" ]; then
+        echo "CRITICAL ERROR: Neither coppeliaSim.sh nor coppeliaSim executable found in /opt/coppeliaSim after extraction."
+        echo "Contents of /opt/coppeliaSim:"
+        find /opt/coppeliaSim -maxdepth 2 # List contents to debug
+        exit 1
+    fi
+    echo "Key CoppeliaSim files seem to be present."
+
+    # remove the tarball
+    rm /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz
+    echo "Removed CoppeliaSim tarball."
+
+    find /opt/coppeliaSim -maxdepth 1 -type f -name "coppeliaSim*" -exec chmod +x {} \; -print
+    echo "Set execute permissions on coppeliaSim* files in /opt/coppeliaSim."
+
+    # --- Set CoppeliaSim Env Vars (Needed for PyRep Build) ---
+    export COPPELIASIM_ROOT=/opt/coppeliaSim
+    export LD_LIBRARY_PATH=${COPPELIASIM_ROOT}:${LD_LIBRARY_PATH}
+    export QT_QPA_PLATFORM_PLUGIN_PATH=${COPPELIASIM_ROOT}
+    export QT_QPA_PLATFORM=offscreen
+
+    # --- Install PyRep ---
+    echo "Installing PyRep from your fork..."
+    git clone --depth 1 https://github.com/lesterpjy/PyRep.git /root/install/PyRep
+    cd /root/install/PyRep
+    pip install -r requirements.txt
+    VERBOSE=1 pip install -e .
+    echo "PyRep installation from fork complete."
+
+
+    # --- Install RLBench ---
+    echo "Installing RLBench from MohitShridhar/RLBench (peract branch)..."
+    cd /root/install 
+    git clone --depth 1 -b peract https://github.com/lesterpjy/RLBench.git /root/install/RLBench
+    cd /root/install/RLBench
+    # Apply close_jar fix
+    if grep -q "if self._succ_grasped is False:" ./rlbench/tasks/close_jar.py; then
+       echo "Applying close_jar fix to RLBench fork..."
+       sed -i "s/if self._succ_grasped is False:/if self._succ_grasped is None:/g" ./rlbench/tasks/close_jar.py
+    else
+       echo "close_jar fix seems to be already applied or not needed in this version of RLBench."
+    fi
+    pip install -r requirements.txt
+    pip install -e .
+    echo "RLBench installation from fork complete."
+
+
+    # --- Install 3D Diffuser Actor Python Dependencies ---
+    cd /root/install 
+    . /opt/diffuser_venv/bin/activate # Ensure venv is active
+
+    # Core ML/DL libs
+    pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117
+    
+    pip install packaging wheel
+    pip install pyzmq cbor2
+
+    pip install diffusers[torch]
+    pip install dgl==1.1.3+cu117 -f https://data.dgl.ai/wheels/cu117/repo.html
+    pip install flash-attn==2.5.9.post1 --no-build-isolation 
+    
+    pip install git+https://github.com/openai/CLIP.git
+    pip install open3d
+    pip install \
+        numpy==1.23.5 \
+        pillow \
+        einops \
+        typed-argument-parser \
+        tqdm \
+        transformers \
+        absl-py \
+        matplotlib \
+        scipy \
+        tensorboard \
+        opencv-python \
+        blosc \
+        setuptools
+
+
+%environment
+    export COPPELIASIM_ROOT=/opt/coppeliaSim
+    export LD_LIBRARY_PATH=${COPPELIASIM_ROOT}:${LD_LIBRARY_PATH}
+    export QT_QPA_PLATFORM_PLUGIN_PATH=${COPPELIASIM_ROOT}/platforms
+    export QT_QPA_PLATFORM=offscreen
+    export PYOPENGL_PLATFORM=egl
+    export DISPLAY=:0
+    export MESA_GL_VERSION_OVERRIDE=4.1
+
+    export VENV_PATH=/opt/diffuser_venv
+    export PATH=${VENV_PATH}/bin:$PATH
+    export PYTHONPATH=/root/install/PyRep:/root/install/RLBench:${PYTHONPATH}
+
+%runscript
+    #!/bin/bash
+    echo "--- SIF Runscript Start ---"
+    echo "Activating Diffuser Actor venv (from %runscript)..."
+    if [ -f /opt/diffuser_venv/bin/activate ]; then
+        source /opt/diffuser_venv/bin/activate
+    else
+        echo "WARNING: /opt/diffuser_venv/bin/activate not found in %runscript!"
+    fi
+    echo "Executing command (from %runscript): $@"
+    exec "$@"
+    echo "--- SIF Runscript End ---" # Will not be reached if exec "$@" works

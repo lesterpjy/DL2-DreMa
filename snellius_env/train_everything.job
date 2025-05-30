@@ -1,32 +1,32 @@
 #!/bin/bash
 #SBATCH --partition=gpu_a100
 #SBATCH --output=work/leo_train_output_%A.out
-#SBATCH --time=00:10:00
+#SBATCH --time=24:00:00
 #SBATCH --ntasks=1
 #SBATCH --mem=64GB
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=10
 
 # set up paths & overrides
-export TASK=slide_block_to_color_target
+export HYDRA_OVERRIDE_RLBENCH_TASKS="[slide_block_to_color_target]"
+
 export PORT=29567
 export LOG_DIR=$(pwd)/outputs/logs
-export DEMO=/scratch-shared/tmp.lUdVGE8VOd/rlbench/val
+export DEMO=/scratch-shared/tmp.lUdVGE8VOd
 export REPLAY=$(pwd)/tmp_all/$PORT
+
+module load 2022
+module spider CUDA/11.7.0
+module spider cuDNN/8.4.1.50-CUDA-11.7.0
 
 # ensure helper scripts are runnable
 chmod +x snellius_env/env_setup.sh snellius_env/run_training.sh
 
-singularity exec --nv peract_jammy.sif nvidia-smi
-singularity exec --nv peract_jammy.sif python3 - <<EOF
-import torch
-print("CUDA available?", torch.cuda.is_available())
-EOF
 
-# launch inside container
+
 # launch inside container (direct entrypoint, no nested shell)
-srun singularity exec --nv \
+singularity exec --nv \
   --bind "$(pwd)":/dream-team \
-  --bind "/scratch-shared/tmp.lUdVGE8VOd/rlbench":"/scratch-shared/tmp.lUdVGE8VOd/rlbench" \
+  --bind "/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask":"/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask" \
   ./peract_jammy.sif \
-    /dream-team/snellius_env/peract_quickstart.sh
+    /dream-team/snellius_env/run_training.sh
