@@ -1,0 +1,16 @@
+#!/bin/bash
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1              # Needed for package_rlbench.py as it launches RLBenchEnv
+#SBATCH --output=work/diffuser_test-data_rearrange_only_%A.out
+#SBATCH --time=00:20:00      # Increased time for processing all tasks, adjust as needed
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=9   # As per your original script
+
+module purge
+module load 2023
+
+pip install typed-argument-parser
+
+export HOST_INPUT_FOR_REPACKAGE_ROOT="/scratch-shared/tmp.lUdVGE8VOd/3d_diff_packaged/test"
+
+python ./3d_diffuser_actor/data_preprocessing/rearrange_rlbench_demos.py --root_dir "${HOST_INPUT_FOR_REPACKAGE_ROOT}" 
