@@ -1,5 +1,18 @@
 # Dream
 
+## PerAct
+
+### Building the container
+To build the Apptainer SIF container, use the DEF file defined at `build_peract_jammy.def`. To run it, execute `sbatch snellius_env/build_peract_jammy.job`. This will generate the SIF container at the project root named `peract_jammy.sif`.
+
+### Data preparation
+To get the data you have to first fetch the RLBench data and then generate the DreMa data. The second step can be done following COPPELIA.md which can be found at DreMa's official repository. After loading both data, merge them in order to train a model that includes both types of data. This should happen at the level of the folder named 'episodes'.
+
+### Training
+To train the model, run `sbatch snellius_env/train_everything.job`, but first make sure to alter the data path inside the same file. The path should go to a depth just before the task name (in this case slide_block_to_color_target). For example, if the path is `/home/user/scratch/slide_block_to_color_target/all_variations/episodes...` then the given path should be `/home/user/scratch/`.
+
+### Evaluation
+To evaluate the model, run `sbatch snellius_env/validate_peract.job`, but first make sure to alter the data path inside the same file. The path should go to a depth just before the task name (in this case slide_block_to_color_target). For example, if the path is `/home/user/scratch/slide_block_to_color_target/all_variations/episodes...` then the given path should be `/home/user/scratch/`. In addition, make sure to give the correct path for the trained weights and create the corresponding folders in which the evaluation will store the results. Details are given at the README.md located at PerAct's official repository. Note that evaluation scripts are not running correctly for PerAct as it is an open issue both for PerAct and this repository.
 
 
 ## 3D Diffuser Actor
@@ -23,3 +36,9 @@ To run the training job on the `slide_block_to_color_target` task, export the en
 Run the training job with `sbatch snellius_env/3d_diff_training.job`.
 
 To evaluate the trained policy, edit `HOST_CHECKPOINT_FILE_PATH` to point to the saved checkpoint file and run `sbatch snellius_env/3d_diff_eval.job`. This currently does not work as the container does not support CoppeliaSim on Snellius.
+
+
+## Test-Time Adaptation (TTA)
+
+This is in an incomplete stage and is reported only for documentation purposes. The corresponding files can be found under the 'TTA' folder.
+
