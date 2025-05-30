@@ -7,6 +7,8 @@
 ### Data preparation
 Following 3D Diffuser Actor's [data preparation readme](https://github.com/nickgkan/3d_diffuser_actor/blob/e3efaa9a5f7f6fe40de5511ca645295f7b0230b9/docs/DATA_PREPARATION_RLBENCH.md), the data preparation steps are: 1. Rerender, 2. rearrange, 3. package. The `sbatch snellius_env/3d_diff_data_repackaging.job` does all of these steps (this does not work due to CoppeliaSim not working on Snellius's headless environemt at runtime) and the `sbatch snellius_env/3d_diff_data_repackaging_only.job` does step 2 and 3 without requiring CoppeliaSim.
 
+`sbatch snellius_env/3d_diff_test_data_rearrange.job` will rearrange only the RLBench test data on the scratch-shared directory.
+
 ### Training and Evaluating
 To build the Apptainer SIF container using the DEF file defined at `./diffuser_actor_jammy.def`, run `sbatch snellius_env/build_diffuser_actor_jammy.job`. This will generate the SIF container at the project root named `diffuser_actor_jammy.sif`.
 
