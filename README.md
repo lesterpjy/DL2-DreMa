@@ -13,6 +13,9 @@ Following 3D Diffuser Actor's [data preparation readme](https://github.com/nickg
 
 `sbatch snellius_env/3d_diff_test_data_rearrange.job` will rearrange only the RLBench test data on the scratch-shared directory. Export the env variable `HOST_INPUT_FOR_REPACKAGE_ROOT` with where the original RLBench test data is placed, currently it points to `/scratch-shared/tmp.lUdVGE8VOd/3d_diff_packaged/test`, and running the job will rearragne the data for running 3D Diffuser Actor testing script.
 
+#### Creating the mixed dataset
+For the RLBench + DreaMa dataset (referred to as “mixed”), the data must first be unzipped, merged into a single directory, and then uniformly renamed. DreaMa episodes follow the `episodeXXXX` format (e.g., `episode0023`), while RLBench uses `episodeXX` (e.g., `episode23`), which breaks the 3D Diffuser Actor’s repackaging scripts. To avoid this, all episodes should be renamed to the `episodeXX` format after merging. Once this is done, the `3d_diff_data_repackaging_only.job` script can be used to prepare the data for use with 3D Diffuser Actor.
+
 ### Training and Evaluating
 
 To run the training job for the original RLBench data on the `slide_block_to_color_target` task, uncomment `HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_onetask_repackaged"` and comment `HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask_repackaged"` in the job file `snellius_env/3d_diff_training.job`. This binds the scratch-shared directory on Snellius where we have placed the original task data repacked for 3D Diffuser Actor, which we repackaged following the [data preparation readme](https://github.com/nickgkan/3d_diffuser_actor/blob/e3efaa9a5f7f6fe40de5511ca645295f7b0230b9/docs/DATA_PREPARATION_RLBENCH.md) provided by the project. We do not upscale the image for fair comparison.
