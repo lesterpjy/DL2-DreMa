@@ -16,7 +16,7 @@ python3 -c "import torch; print('CUDA visible?', torch.cuda.is_available())"
 xvfb-run -a python3 /root/install/peract/train.py \
   method=PERACT_BC \
   rlbench.tasks=${HYDRA_OVERRIDE_RLBENCH_TASKS} \
-  rlbench.task_name='multi' \
+  rlbench.task_name='slide_block_to_color_target' \
   rlbench.cameras=[front,right_shoulder,left_shoulder] \
   rlbench.demos=10 \
   rlbench.demo_path=$DEMO \
@@ -39,4 +39,6 @@ xvfb-run -a python3 /root/install/peract/train.py \
   framework.csv_logging=True \
   framework.tensorboard_logging=True \
   ddp.num_devices=1 \
-  ddp.master_port="'$PORT'"
+  ddp.master_port="'$PORT'" \
+  +framework.weights_dir=/home/scur2683/dream-team/outputs/logs/slide_block_to_color_target/PERACT_BC/seed0/weights/55000 \
+  framework.load_existing_weights=true

@@ -1,7 +1,11 @@
 #!/bin/bash
-#SBATCH -p cbuild
-#SBATCH -t 02:00:00
-#SBATCH --job-name=build_peract_jammy
+#SBATCH --job-name=peract_eval
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=9
+#SBATCH --time=02:00:00
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
 #SBATCH --output=work/build_peract_jammy_%A.out
 
 module purge

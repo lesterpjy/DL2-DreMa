@@ -11,7 +11,7 @@ module load 2023
 
 echo "=== Slurm Job: Starting 3D Diffuser Actor Data Preparation (Merged Script) ==="
 PROJECT_ROOT_ON_HOST=$(pwd) # e.g., /gpfs/home4/scur2683/dream-team
-CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif"
+CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy_cop4_7.sif"
 
 # --- Host paths for data ---
 # These will be exported and accessible inside the container via /scratch-shared bind mount
@@ -46,9 +46,10 @@ mkdir -p "${HOST_OUTPUT_RAW_HIGHRES_ROOT}/train" "${HOST_OUTPUT_RAW_HIGHRES_ROOT
 mkdir -p "${HOST_OUTPUT_PACKAGED_ROOT}/train" "${HOST_OUTPUT_PACKAGED_ROOT}/val"
 echo "Host output directories ensured."
 
-apptainer exec --nv \
+
+singularity exec --nv \
   --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
-  --bind "/scratch-shared":/scratch-shared \
+  --bind "/scratch-shared/tmp.lUdVGE8VOd":/scratch-shared/tmp.lUdVGE8VOd \
   --bind "${HOST_GOOD_TTT_FILE}":"${CONTAINER_MOUNTED_GOOD_TTT_FILE}":ro \
   "${CONTAINER_IMAGE_PATH}" \
   /bin/bash -c ' # Start of the inlined script block
@@ -98,7 +99,8 @@ apptainer exec --nv \
     export PYOPENGL_PLATFORM="egl" # For headless OpenGL
     echo "PYOPENGL_PLATFORM: ${PYOPENGL_PLATFORM}"
     # export LIBGL_ALWAYS_SOFTWARE="1" # If EGL/GPU issues persist, this can be a fallback
-
+    export QT_DEBUG_PLUGINS=1
+    
     export PYTHONIOENCODING=utf-8
     export PYTHONPATH=/dream-team/3d_diffuser_actor:/root/install/PyRep:/root/install/RLBench:${PYTHONPATH}
     echo "PYTHONPATH updated to: $PYTHONPATH"
@@ -143,7 +145,7 @@ apptainer exec --nv \
             echo "Re-rendering task: ${task_name} for split: ${CURRENT_SPLIT}"
             # Ensure xvfb-run is used if the script requires a display, even if offscreen
             # rerender_highres_rlbench.py likely uses PyRep which needs an X server context
-             xvfb-run -a python3 ${PYTHON_EXEC_RERENDER} \
+             python3 ${PYTHON_EXEC_RERENDER} \
                 --tasks="${task_name}" \
                 --save_path="${RAW_HIGHRES_SAVE_PATH}" \
                 --demo_path="${DEMO_ROOT_FOR_RERENDER}" \
@@ -156,14 +158,14 @@ apptainer exec --nv \
         # === Step 2: Rearranging directories ===
         echo "--- Step 2: Rearranging directories for ${CURRENT_SPLIT} ---"
         # This script might also need xvfb if it instantiates RLBench/PyRep environment
-        xvfb-run -a python3 ${PYTHON_EXEC_REARRANGE} --root_dir "${RAW_HIGHRES_SAVE_PATH}"
+        python3 ${PYTHON_EXEC_REARRANGE} --root_dir "${RAW_HIGHRES_SAVE_PATH}"
 
         # === Step 3: Packaging episodes ===
         echo "--- Step 3: Packaging episodes for ${CURRENT_SPLIT} ---"
         for task_name in ${TASKS_TO_PROCESS}; do
             echo "Packaging task: ${task_name} for split: ${CURRENT_SPLIT}"
             # This script might also need xvfb
-            xvfb-run -a python3 ${PYTHON_EXEC_PACKAGE} \
+            python3 ${PYTHON_EXEC_PACKAGE} \
                 --data_dir="${RAW_HIGHRES_SAVE_PATH}" \
                 --tasks="${task_name}" \
                 --output="${PACKAGED_SAVE_PATH}" \

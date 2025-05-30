@@ -12,6 +12,7 @@ From: nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu22.04
 %post
     set -eux
 
+
     ## —————— 0) Fix /tmp so APT can write its conf files ——————
     chmod 1777 /tmp
     mkdir -p /var/tmp && chmod 1777 /var/tmp
@@ -46,6 +47,7 @@ From: nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu22.04
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         build-essential cmake git curl wget unzip ca-certificates gnupg \
         python3.8 python3.8-dev python3.8-venv python3-pip \
+        xz-utils \
         libffi-dev pkg-config \
         libglu1-mesa-dev libgl1-mesa-glx libglew-dev libosmesa6-dev \
         libxrender1 libsm6 libxext6 libxi-dev libxinerama-dev libxcursor-dev \
@@ -65,15 +67,42 @@ From: nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu22.04
     # (previous version) python3 -m pip install --upgrade pip setuptools
 
     ## 3) Extract CoppeliaSim into /opt/coppeliaSim **before** PyRep
+    #mkdir -p /opt/coppeliaSim
+    #tar -xJf /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz \
+    #    -C /opt/coppeliaSim --strip-components=1
+    #rm /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz
+    #chmod +x /opt/coppeliaSim/coppeliaSim.sh
+
+    # ------------------------------------------------------------------------------------------------------
+
+    echo ">>> INSIDE CONTAINER: before untarring, /root/install contains:"
+    ls -l /root/install || echo "(nothing or no /root/install yet)"
+    # Ensure tarball exists (good check from your previous additions)
+    if [ ! -f "/root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz" ]; then
+        echo "FATAL: CoppeliaSim tarball not found in /root/install during %post!"
+        exit 1
+    fi
+
+    echo ">>> CREATING AND EXTRACTING COPPELIASIM"
     mkdir -p /opt/coppeliaSim
     tar -xJf /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz \
         -C /opt/coppeliaSim --strip-components=1
-    rm /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz
+    if [ $? -ne 0 ] || [ ! -f "/opt/coppeliaSim/libcoppeliaSim.so" ]; then # Good check
+        echo "FATAL: tar extraction for CoppeliaSim FAILED or libcoppeliaSim.so is missing!"
+        ls -lR /opt/coppeliaSim 
+        exit 1
+    fi
+    echo "CoppeliaSim successfully extracted."
     chmod +x /opt/coppeliaSim/coppeliaSim.sh
+    rm /root/install/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz
+    echo ">>> COPPELIASIM SETUP DONE"
+
+    # ---------------------------------------------------------------------------------------------------------------
 
     ## 4) Set CoppeliaSim env (needed at build time for PyRep)
     export COPPELIASIM_ROOT=/opt/coppeliaSim
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$COPPELIASIM_ROOT
+    export LD_LIBRARY_PATH="${COPPELIASIM_ROOT}:${LD_LIBRARY_PATH}"
+    #export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$COPPELIASIM_ROOT
     export QT_QPA_PLATFORM_PLUGIN_PATH=$COPPELIASIM_ROOT
     export QT_QPA_PLATFORM=offscreen
 
@@ -158,7 +187,8 @@ EOF
     source /opt/pyenv/bin/activate
     export PATH=/opt/pyenv/bin:$PATH
     # make sure per-install code is on PYTHONPATH
-    export PYTHONPATH=/root/install/peract:/root/install/RLBench:/root/install/YARR:/root/install/PyRep
+    export LD_LIBRARY_PATH="${COPPELIASIM_ROOT}:${LD_LIBRARY_PATH}"
+    export PYTHONPATH="/root/install/peract:/root/install/RLBench:/root/install/YARR:/root/install/PyRep:${PYTHONPATH}"
     # export PYTHONPATH=/root/install/peract:$PYTHONPATH
 
 

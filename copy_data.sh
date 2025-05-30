@@ -6,11 +6,11 @@
 
 set -euo pipefail
 
-SRC="/scratch-shared/tmp.lUdVGE8VOd/rlbench/train/slide_block_to_color_target/all_variations/episodes"
-DST="/scratch-shared/tmp.lUdVGE8VOd/mix_data/slide_block_to_color_target/all_variations/episodes"
+SRC="/scratch-shared/tmp.lUdVGE8VOd/drema_data/slide_block_to_color_target/all_variations/episodes"
+DST="/scratch-shared/tmp.lUdVGE8VOd/rlbench_moved/train/slide_block_to_color_target/all_variations/episodes"
 
 # Make sure destination exists
-mkdir -p "$DST"
+# mkdir -p "$DST"
 
 echo '--- final GPU check ---'
 

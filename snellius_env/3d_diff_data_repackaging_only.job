@@ -18,9 +18,9 @@ CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif"
 # HOST_INPUT_FOR_REPACKAGE_ROOT is where the "raw highres" data (input for rearrange/package) is located.
 # export HOST_INPUT_FOR_REPACKAGE_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_raw_highres_tasks"
 # If your "one task" test data was in a different location and you want to use that, adjust this path:
-export HOST_INPUT_FOR_REPACKAGE_ROOT="/home/scur2683/dream-team/data_onetask/mixed/"
+export HOST_INPUT_FOR_REPACKAGE_ROOT="/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask"
 
-export HOST_OUTPUT_PACKAGED_ROOT="/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask_repackaged" # Adjusted output name
+export HOST_OUTPUT_PACKAGED_ROOT="/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask_repackaged"
 
 # --- Task configuration ---
 # All tasks from your earlier script
@@ -130,7 +130,7 @@ singularity exec --nv \
     PYTHON_EXEC_PACKAGE="./data_preprocessing/package_rlbench.py"
 
     # --- Loop through TRAIN, VAL, TEST splits ---
-    for CURRENT_SPLIT in "train" "val" "test"; do
+    for CURRENT_SPLIT in "val"; do
         echo ""
         echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
         echo "--- Starting Data REARRANGE & PACKAGING for SPLIT: ${CURRENT_SPLIT} ---"
