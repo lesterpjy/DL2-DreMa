@@ -2,54 +2,28 @@
 #SBATCH --partition=gpu_a100
 #SBATCH --gpus=1
 #SBATCH --output=work/diffuser_train_peract_%A.out
-#SBATCH --error=work/diffuser_train_peract_%A.err
-#SBATCH --time=15:00:00
+#SBATCH --time=25:00:00
 #SBATCH --ntasks=1
 
 module purge
 module load 2023
 
 echo "=== Slurm Job: Starting 3D Diffuser Actor Training (PerAct Setup) ==="
-PROJECT_ROOT_ON_HOST=$(pwd) # /gpfs/home4/scur2683/dream-team
+PROJECT_ROOT_ON_HOST=$(pwd)
 CONTAINER_IMAGE_PATH="${PROJECT_ROOT_ON_HOST}/diffuser_actor_jammy.sif"
 
 # --- Path to the pre-packaged PerAct data on the host ---
-HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_onetask_repackaged" # Contains train/ and val/
+# HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/Peract_onetask_repackaged" # contains train and val for rlbench
+HOST_PERACT_PACKAGED_DATA_ROOT="/scratch-shared/tmp.lUdVGE8VOd/mixed_onetask_repackaged" # contains train and val for rlbench + drema
 
-# --- Path where this data will be accessible inside the container ---
-# The training script expects paths like 'data/peract/Peract_packaged/train'
-# So we need to mount HOST_PERACT_PACKAGED_DATA_ROOT to a location such that
-# '/dream-team/3d_diffuser_actor/data/peract/Peract_packaged' points to it.
-# This means we need a '/dream-team/3d_diffuser_actor/data/peract' directory structure
-# inside the container, and then mount HOST_PERACT_PACKAGED_DATA_ROOT to
-# '/dream-team/3d_diffuser_actor/data/peract/Peract_packaged' if it's not already part of project root.
-
-# Best approach: Ensure the training script's relative paths for data
-# resolve correctly given the bind mounts.
-# The script `train_keypose_peract.sh` uses:
-# dataset=data/peract/Peract_packaged/train
-# valset=data/peract/Peract_packaged/val
-# These paths are relative to where `main_trajectory.py` is run from,
-# which will be /dream-team/3d_diffuser_actor/ inside the container.
-# So, we need to make sure that inside the container:
-# /dream-team/3d_diffuser_actor/data/peract/Peract_packaged/train points to HOST_PERACT_PACKAGED_DATA_ROOT/train
-
-# We will bind mount the entire HOST_PERACT_PACKAGED_DATA_ROOT.
-# The script then needs to be adjusted or the target path carefully chosen.
-# Easiest: Adjust dataset/valset paths in the command.
 CONTAINER_DATA_BASE_PATH="/data_in_container" # An arbitrary base path in container for clarity
 CONTAINER_PERACT_PACKAGED_PATH="${CONTAINER_DATA_BASE_PATH}/Peract_packaged"
 
-# --- Optional: Path to your known-good task_design.ttt on the host (if needed by training/eval) ---
-# Training typically doesn't require launching the simulator in the same way data gen does.
-# However, if any part of main_trajectory.py or its dependencies tries to init RLBench/PyRep
-# (e.g., for validation against sim, or loading task definitions that require sim), this might be needed.
-# For now, let's assume it's NOT needed for training with pre-packaged data, to keep it simple.
-# If errors indicate missing sim objects, we can add this back.
+# load external known good ttt file
 HOST_GOOD_TTT_FILE="/scratch-shared/tmp.lUdVGE8VOd/good_rlbench_assets/task_design.ttt"
-CONTAINER_MOUNTED_GOOD_TTT_FILE="/good_assets_host/task_design.ttt" # Matches bind mount below
+CONTAINER_MOUNTED_GOOD_TTT_FILE="/good_assets_host/task_design.ttt"
 if [ ! -f "${HOST_GOOD_TTT_FILE}" ]; then
-    echo "ERROR: Known-good TTT file not found at ${HOST_GOOD_TTT_FILE} on the HOST" # Clarified HOST
+    echo "ERROR: Known-good TTT file not found at ${HOST_GOOD_TTT_FILE} on the HOST"
     exit 1
 else
     echo "INFO: Found known-good TTT file at ${HOST_GOOD_TTT_FILE} on the HOST"
@@ -64,41 +38,24 @@ echo "Container Image: ${CONTAINER_IMAGE_PATH}"
 echo "Host PerAct Packaged Data: ${HOST_PERACT_PACKAGED_DATA_ROOT}"
 echo "Container PerAct Packaged Data will be at: ${CONTAINER_PERACT_PACKAGED_PATH}"
 
-# --- Training script command (adapted from train_keypose_peract.sh) ---
-# Key changes:
-# - Adjusted dataset/valset paths to use CONTAINER_PERACT_PACKAGED_PATH
-# - Added xvfb-run -a IF training involves any RLBench/PyRep/CoppeliaSim instantiation.
-#   For training on pre-packaged .dat files, this is *usually* not needed unless
-#   the main_trajectory.py script itself tries to launch simulation for some reason
-#   (e.g., online eval, visualization callback).
-#   Start WITHOUT xvfb-run. If GLIB/Qt errors appear, add it.
-# - We are running this directly, not via another .sh script inside the container for now.
-
-# Define parameters from train_keypose_peract.sh
-main_dir_in_container="/dream-team/3d_diffuser_actor/Actor_18Peract_100Demo_multitask_output" # Output inside container
+# define parameters from train_keypose_peract.sh
+main_dir_in_container="/dream-team/3d_diffuser_actor/Actor_Peract-Drema_100k_slide_output"
 dataset_in_container="${CONTAINER_PERACT_PACKAGED_PATH}/train"
 valset_in_container="${CONTAINER_PERACT_PACKAGED_PATH}/val"
 instructions_in_container="../instructions/peract/instructions.pkl" # "instructions/peract/instructions.pkl" # Relative to /dream-team/3d_diffuser_actor
-gripper_loc_bounds_in_container="tasks/18_peract_tasks_location_bounds.json" # Relative
+gripper_loc_bounds_in_container="tasks/18_peract_tasks_location_bounds.json"
 
 lr="1e-4"
 dense_interpolation="1"
 interpolation_length="2"
 num_history="3"
 diffusion_timesteps="100"
-B="4" # Batch size
-C="120" # Embedding dim
-# ngpus="1" # torchrun will use the 1 GPU made visible by Slurm with --gpus=1.
-           # If you request more in Slurm (--gpus=N), torchrun can use N.
-           # The script had ngpus=6, but that's for nproc_per_node.
-           # For a single GPU job, nproc_per_node should be 1.
-ngpus_torchrun="1" # For a single GPU job as requested by Slurm.
+B="4" # batch size
+C="120" # embedding dim
+ngpus_torchrun="1"
 quaternion_format="xyzw"
 
-
-# Ensure the host directory for output exists and is writable
-# This is where main_dir_in_container will effectively write if it's part of /dream-team
-mkdir -p "${PROJECT_ROOT_ON_HOST}/3d_diffuser_actor/Actor_18Peract_100Demo_multitask_output"
+mkdir -p "${PROJECT_ROOT_ON_HOST}/3d_diffuser_actor/Actor_Peract-Drema_100k_slide_output"
 
 apptainer exec --nv \
   --bind "${PROJECT_ROOT_ON_HOST}":/dream-team \
@@ -106,12 +63,10 @@ apptainer exec --nv \
   --bind "${HOST_PERACT_PACKAGED_DATA_ROOT}":"${CONTAINER_PERACT_PACKAGED_PATH}":ro \
   --bind "${HOST_GOOD_TTT_FILE}":"${CONTAINER_MOUNTED_GOOD_TTT_FILE}":ro \
   "${CONTAINER_IMAGE_PATH}" \
-  /bin/bash -c ' # Use single quotes to start the multi-line command block
-    set -e # Exit on error within this script block
+  /bin/bash -c '
+    set -e
     echo "--- Inside Apptainer Container for Training (COMMAND_INSIDE_CONTAINER) ---"
 
-    # The %runscript of the SIF should have already activated the venv.
-    # Verify:
     echo "Current user: $(whoami)"
     echo "--- Verifying Python Environment ---"
     echo "Initial PATH: $PATH"
@@ -127,14 +82,12 @@ apptainer exec --nv \
     echo "pip --version: $(pip --version || echo "pip --version command failed")"
     echo "--- End Python Environment Verification ---"
 
-    # Print torch.backends.cudnn settings status
+    # torch.backends.cudnn settings status
     python -c "import torch; print(f\"torch.backends.cudnn.benchmark: {torch.backends.cudnn.benchmark}\"); print(f\"torch.backends.cudnn.deterministic: {torch.backends.cudnn.deterministic}\"); print(f\"torch.backends.cudnn.enabled: {torch.backends.cudnn.enabled}\")"
-
 
     echo "--- Checking existence of TTT file from shell BEFORE setting ENV var ---";
     ls -l "'"${CONTAINER_MOUNTED_GOOD_TTT_FILE}"'" || echo "WARNING: ls -l failed for ${CONTAINER_MOUNTED_GOOD_TTT_FILE}"; # Note quoting for var
 
-    # Set the environment variable to tell our modified RLBench to use the override
     export RLBENCH_OVERRIDE_TTT_FILE_PATH="'"${CONTAINER_MOUNTED_GOOD_TTT_FILE}"'";
     echo "RLBENCH_OVERRIDE_TTT_FILE_PATH set to: ${RLBENCH_OVERRIDE_TTT_FILE_PATH}";
     echo "--- Checking existence of TTT file from shell AFTER setting ENV var (should be same) ---";
@@ -155,7 +108,7 @@ apptainer exec --nv \
     echo "NVIDIA-SMI:"
     nvidia-smi
 
-    # xvfb-run -a # Only if needed
+    # xvfb-run -a # only if needed
     torchrun --nproc_per_node '"${ngpus_torchrun}"' --master_port $(($RANDOM % 10000 + 20000)) \
         main_trajectory.py \
         --tasks slide_block_to_color_target \
@@ -164,7 +117,7 @@ apptainer exec --nv \
         --instructions "'"$(echo "${instructions_in_container}")"'" \
         --gripper_loc_bounds "'"$(echo "${gripper_loc_bounds_in_container}")"'" \
         --num_workers 1 \
-        --train_iters 60000 \
+        --train_iters 100000 \
         --embedding_dim '"${C}"' \
         --use_instruction 1 \
         --rotation_parametrization 6D \
@@ -181,13 +134,13 @@ apptainer exec --nv \
         --variations {0..3} \
         --lr '"${lr}"' \
         --num_history '"${num_history}"' \
-        --cameras left_shoulder right_shoulder wrist front \
+        --cameras left_shoulder right_shoulder front \
         --max_episodes_per_task -1 \
         --quaternion_format '"${quaternion_format}"' \
         --run_log_dir diffusion_multitask-C${C}-B${B}-lr${lr}-DI${dense_interpolation}-${interpolation_length}-H${num_history}-DT${diffusion_timesteps}_QUICKTEST
 
     echo "Training script finished."
-' # End single quotes for the multi-line command block
+'
 
 EXIT_CODE=$?
 echo "=== Slurm Job: 3D Diffuser Actor Training Finished with exit code $EXIT_CODE ==="

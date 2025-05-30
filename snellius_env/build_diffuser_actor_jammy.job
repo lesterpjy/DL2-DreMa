@@ -7,7 +7,6 @@
 module purge
 module load 2023
 
-# Set up a big-enough tmpdir under /tmp
 export APPTAINER_TMPDIR=$(mktemp -d /tmp/$(whoami)XXXXXX)
 export SINGULARITY_TMPDIR=$APPTAINER_TMPDIR
 echo "Using TMPDIR: ${APPTAINER_TMPDIR}"
@@ -22,7 +21,6 @@ echo "*** HOST: current working directory ***"
 pwd
 ls -l
 
-# Ensure the CoppeliaSim tarball is present in the build context (current dir)
 if [ ! -f CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz ]; then
     echo "ERROR: CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz not found in $(pwd)"
     exit 1
@@ -39,7 +37,6 @@ else
     echo "❌ Build failed with exit code ${BUILD_EXIT_CODE}"
 fi
 
-# Clean up tmpdir
 rm -rf "${APPTAINER_TMPDIR}"
 
 exit $BUILD_EXIT_CODE
