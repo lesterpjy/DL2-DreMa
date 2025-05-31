@@ -45,7 +45,7 @@ The motivation for this project stemmed from several observations:
 
 This project was motivated by the desire to validate DreMa's promising approach on other advanced policies (3D Diffuser Actor) and to gain first-hand experience with the practicalities of implementing and extending such systems, especially concerning the often-understated reproducibility and deployment hurdles.
 
-## 3. Our Novel Contribution
+## Our Novel Contribution
 
 Our contributions in this project are:
 1.  **Extended Evaluation of DREMA to 3D Diffuser Actor:** We were the first, to our knowledge, to evaluate the impact of DreMa-generated synthetic data on the 3D Diffuser Actor policy, providing new insights into the benefits and potential trade-offs of this data augmentation strategy.
@@ -53,7 +53,7 @@ Our contributions in this project are:
 3.  **Exploration of Test-Time Adaptation (TTA):** We initiated an exploration of a TTA pipeline leveraging DreMa for scene reconstruction at inference and a Vision-Language Model (VLM) for task monitoring. While rendering and integration challenges prevented full implementation, this outlines a promising future research direction.
 4.  **Recommendations for Improved Reproducibility:** Based on our experiences, we propose concrete recommendations for the robotics research community to improve reproducibility, such as providing HPC-compatible containers (e.g., Apptainer) and more self-contained experimental setups.
 
-## 4. Results
+## Results
 
 Our experiments yielded mixed but insightful results:
 
@@ -82,7 +82,7 @@ Our experiments yielded mixed but insightful results:
 
 The findings underscore that while synthetic data holds promise, its integration is not always straightforward, and single-task training metrics may not fully capture true policy performance. The pervasive reproducibility and deployment challenges in robotics are also critical takeaways.
 
-## 5. How to Run the Code
+## How to Run the Code
 
 This project relies heavily on specific versions of simulators and libraries. We used Apptainer (formerly Singularity) for containerization, suitable for HPC environments like Snellius.
 
@@ -172,7 +172,7 @@ To evaluate the model, run `sbatch snellius_env/validate_peract.job`, but first 
 
 This is in an incomplete stage and is reported only for documentation purposes. The corresponding files can be found under the 'TTA' folder.
 
-## 6. Conclusion
+## Conclusion
 
 Our project reproduced and extended evaluations of robotic manipulation policies using synthetic data from DreMa. Critically, our work underscores the significant reproducibility and deployment challenges prevalent in robotics research. Complex software dependencies, OS and graphics incompatibilities, and problematic headless rendering for simulators like CoppeliaSim severely impeded full policy evaluation and the development of a test-time adaptation pipeline.
 
@@ -181,7 +181,7 @@ We urge the research community to prioritize reproducibility by:
 *   Providing HPC-compatible container images (e.g., Apptainer, as Docker is often restricted on HPCs).
 *   Developing more self-contained experimental setups that minimize reliance on legacy or system-specific software.
 
-## 7. Student Contributions
+## Student Contributions
 
 This project was a collaborative effort by:
 
